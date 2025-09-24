@@ -82,11 +82,25 @@ const Header = ({ title, onBack, rightButtons }) => (
 
 const App = () => {
   const { auth, db, userId, isAuthReady } = useFirebase();
+  const dummyItems = [
+    { id:101, category: 'Tops', imageUrl: "/mycloset_mock_imgs/tshirt.png", name: "Blue T-shirt" },
+    { id:102, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/chikan_kurti.png", name: "Chikan Kurti" },
+    { id:103, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/sweatshirt.png", name: "Chikan Kurti" },
+    { id:104, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/jeans.png", name: "Blue T-shirt" },
+    { id:105, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/denim_shorts.png", name: "Blue T-shirt" },
+    { id:106, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/heels.png", name: "Blue T-shirt" },
+    { id:107, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/nike_sneakers.png", name: "Blue T-shirt" },
+    { id:108, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/converse.png", name: "Blue T-shirt" },
+    { id:109, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/winter_coat.png", name: "Chikan Kurti" },
+    { id:110, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/trouser.png", name: "Chikan Kurti" },
+    // { id:111, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/adi.png", name: "Chikan Kurti" },
+    { id:112, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/leather_jacket.png", name: "Chikan Kurti" },
+    { id:113, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/palazzo.png", name: "Chikan Kurti" },
+  ];
   const [screen, setScreen] = useState('login');
-  const [closetItems, setClosetItems] = useState([]);
+  const [closetItems, setClosetItems] = useState(dummyItems);
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [selectedOutfitItems, setSelectedOutfitItems] = useState({
-    Head: null,
     Tops: null,
     Bottoms: null,
     Footwear: null,
@@ -341,64 +355,77 @@ const LoginSignupScreen = () => (
 
 
   const ClosetScreen = () => {
-    const categories = ["Head", "Tops", "Bottoms", "Footwear"];
-    const filteredItems = closetItems.filter(item => item.category === currentCategory);
-    const onImageClick = (item) => {
-      setSelectedOutfitItems(prev => ({ ...prev, [item.category]: item }));
-      showToast(`Selected ${item.category} item for the outfit!`, "success");
-    };
+  const categories = ["Tops", "Bottoms", "Footwear"];
+  const [selectedFilter, setSelectedFilter] = useState("All");
 
-    return (
-      <div className="flex flex-grow w-full overflow-hidden p-6">
-        <div className="flex flex-col lg:flex-row flex-grow w-full space-y-4 lg:space-y-0 lg:space-x-6">
-          <div className="flex-grow flex flex-col p-4 bg-stone-800/40 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md glassy-card">
-            <div className="flex overflow-x-auto space-x-2 pb-4 no-scrollbar">
-              {categories.map(category => (
-                <button
-                  key={category}
-                  onClick={() => setCurrentCategory(category)}
-                  className={`px-6 py-2 rounded-full font-medium transition-colors whitespace-nowrap glassy-category-button ${
-                    currentCategory === category
-                      ? "bg-purple-600/60 text-white shadow-lg"
-                      : "text-stone-300 hover:bg-stone-600/40"
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-            <div className="flex-grow overflow-y-auto">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-2">
-                {filteredItems.length > 0 ? (
-                  filteredItems.map(item => (
-                    <motion.div
-                      key={item.id}
-                      layout
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ duration: 0.3 }}
-                      className="relative group rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer glassy-item"
-                      onClick={() => onImageClick(item)}
-                    >
-                      <img
-                        src={item.imageUrl}
-                        alt={item.category}
-                        className="w-full h-48 object-cover object-center"
-                      />
-                      <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-white font-bold text-center text-lg">{item.category}</span>
-                      </div>
-                    </motion.div>
-                  ))
-                ) : (
-                  <div className="col-span-full text-center p-8 text-stone-500 text-lg">
-                    No items in this category. Upload something!
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+  const filteredItems = selectedFilter === "All"
+    ? closetItems
+    : closetItems.filter(item => item.category === selectedFilter);
+
+  const onImageClick = (item) => {
+  
+    showToast(`Clicked on ${item.category} item!`, "success");
+  };
+
+  return (
+    <div className="flex flex-grow w-full overflow-hidden p-6">
+      <div className="flex flex-col lg:flex-row flex-grow w-full space-y-4 lg:space-y-0 lg:space-x-6">
+        <div className="flex-grow flex flex-col p-4 bg-stone-800/40 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md glassy-card">
+          <div className="flex overflow-x-auto space-x-2 pb-4 no-scrollbar">
+            <button
+              onClick={() => setSelectedFilter("All")}
+              className={`px-6 py-2 rounded-full font-medium transition-colors whitespace-nowrap glassy-category-button ${
+                selectedFilter === "All"
+                  ? "bg-purple-600/60 text-white shadow-lg"
+                  : "text-stone-300 hover:bg-stone-600/40"
+              }`}
+            >
+              All
+            </button>
+            {categories.map(category => (
+              <button
+                key={category}
+                onClick={() => setSelectedFilter(category)}
+                className={`px-6 py-2 rounded-full font-medium transition-colors whitespace-nowrap glassy-category-button ${
+                  selectedFilter === category
+                    ? "bg-purple-600/60 text-white shadow-lg"
+                    : "text-stone-300 hover:bg-stone-600/40"
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+          <div className="flex-grow overflow-y-auto">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-2">
+              {filteredItems.length > 0 ? (
+                filteredItems.map(item => (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative group rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer glassy-item"
+                    onClick={() => onImageClick(item)}
+                  >
+                    <img
+                      src={item.imageUrl}
+                      alt={item.category}
+                      className="w-full h-48 object-cover object-center"
+                    />
+                    {/* ❌ REMOVED THE OVERLAY DIV HERE ❌ */}
+                  </motion.div>
+                ))
+              ) : (
+                <div className="col-span-full text-center p-8 text-stone-500 text-lg">
+                  No items in this category. Upload something!
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       
           <div className="flex-shrink-0 w-full lg:w-96 bg-stone-800/40 p-6 rounded-2xl shadow-xl flex flex-col items-center space-y-4 backdrop-blur-md glassy-card">
             <h3 className="text-xl font-bold text-stone-200">Outfit of the Day</h3>
