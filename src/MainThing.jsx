@@ -81,11 +81,19 @@ const Header = ({ title, onBack, rightButtons }) => (
 const App = () => {
   const { auth, db, userId, isAuthReady } = useFirebase();
   const dummyItems = [
-    { id: 'dummy-2', category: 'Tops', imageUrl: "/assets/dummy1.jpg" },
-    { id: 'dummy-3', category: 'Tops', imageUrl: 'https://placehold.co/400x400/e53e3e/ffffff?text=Jacket' },
-    { id: 'dummy-4', category: 'Bottoms', imageUrl: 'https://placehold.co/400x400/38a169/ffffff?text=Jeans' },
-    { id: 'dummy-5', category: 'Footwear', imageUrl: 'https://placehold.co/400x400/dd6b20/ffffff?text=Sneakers' },
-    { id: 'dummy-6', category: 'Footwear', imageUrl: 'https://placehold.co/400x400/b794f4/ffffff?text=Boots' },
+    { id:101, category: 'Tops', imageUrl: "/mycloset_mock_imgs/tshirt.png", name: "Blue T-shirt" },
+    { id:102, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/chikan_kurti.png", name: "Chikan Kurti" },
+    { id:103, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/sweatshirt.png", name: "Chikan Kurti" },
+    { id:104, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/jeans.png", name: "Blue T-shirt" },
+    { id:105, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/denim_shorts.png", name: "Blue T-shirt" },
+    { id:106, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/heels.png", name: "Blue T-shirt" },
+    { id:107, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/nike_sneakers.png", name: "Blue T-shirt" },
+    { id:108, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/converse.png", name: "Blue T-shirt" },
+    { id:109, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/winter_coat.png", name: "Chikan Kurti" },
+    { id:110, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/trouser.png", name: "Chikan Kurti" },
+    { id:111, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/adi.png", name: "Chikan Kurti" },
+    { id:112, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/leather_jacket.png", name: "Chikan Kurti" },
+    { id:113, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/palazzo.png", name: "Chikan Kurti" },
   ];
   const [screen, setScreen] = useState('login');
   const [closetItems, setClosetItems] = useState(dummyItems);
@@ -361,24 +369,22 @@ const App = () => {
               {filteredItems.length > 0 ? (
                 filteredItems.map(item => (
                   <motion.div
-                    key={item.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    transition={{ duration: 0.3 }}
-                    className="relative group rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer glassy-item"
-                    onClick={() => onImageClick(item)}
-                  >
-                    <img
-                      src={item.imageUrl}
-                      alt={item.category}
-                      className="w-full h-48 object-cover object-center"
-                    />
-                    <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-white font-bold text-center text-lg">{item.category}</span>
-                    </div>
-                  </motion.div>
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    transition={{ duration: 0.3 }}
+                    className="relative group rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer glassy-item"
+                    onClick={() => onImageClick(item)}
+                  >
+                    <img
+                      src={item.imageUrl}
+                      alt={item.category}
+                      className="w-full h-48 object-cover object-center"
+                    />
+                    {/* ❌ REMOVED THE OVERLAY DIV HERE ❌ */}
+                  </motion.div>
                 ))
               ) : (
                 <div className="col-span-full text-center p-8 text-stone-500 text-lg">
