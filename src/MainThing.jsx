@@ -466,16 +466,16 @@ const App = () => {
     const [selectedCategories, setSelectedCategories] = useState([]);
   
     const products = [
-      { id: 1, name: "Casual T-Shirt", price: 25, availability: "buy", imageUrl: "https://placehold.co/400x400/3c3c3c/ffffff?text=T-Shirt", category: "Tops" },
-      { id: 2, name: "Blue Jeans", price: 50, availability: "rent", imageUrl: "https://placehold.co/400x400/4c51bf/ffffff?text=Jeans", category: "Bottoms" },
-      { id: 3, name: "Leather Jacket", price: 120, availability: "buy", imageUrl: "https://placehold.co/400x400/667eea/ffffff?text=Jacket", category: "Tops" },
-      { id: 4, name: "Running Shoes", price: 85, availability: "buy", imageUrl: "https://placehold.co/400x400/e53e3e/ffffff?text=Shoes", category: "Footwear" },
-      { id: 5, name: "Wool Beanie", price: 20, availability: "rent", imageUrl: "https://placehold.co/400x400/319795/ffffff?text=Beanie", category: "Head" },
-      { id: 6, name: "Sweatshirt", price: 40, availability: "buy", imageUrl: "https://placehold.co/400x400/2f855a/ffffff?text=Sweatshirt", category: "Tops" },
-      { id: 7, name: "Formal Trousers", price: 65, availability: "buy", imageUrl: "https://placehold.co/400x400/dd6b20/ffffff?text=Trousers", category: "Bottoms" },
-      { id: 8, name: "Slip-on Sneakers", price: 70, availability: "rent", imageUrl: "https://placehold.co/400x400/b794f4/ffffff?text=Sneakers", category: "Footwear" },
-      { id: 9, name: "Fedora Hat", price: 55, availability: "rent", imageUrl: "https://placehold.co/400x400/d53f8c/ffffff?text=Fedora", category: "Head" },
-      { id: 10, name: "Winter Coat", price: 150, availability: "buy", imageUrl: "https://placehold.co/400x400/1a202c/ffffff?text=Coat", category: "Tops" },
+      { id: 1, name: "Casual T-Shirt", price: 25, availability: "buy", imageUrl: "/mock_imgs/tshirt.png", category: "Tops" },
+      { id: 2, name: "Blue Jeans", price: 50, availability: "rent", imageUrl: "/mock_imgs/jeans.png", category: "Bottoms" },
+      { id: 3, name: "Leather Jacket", price: 120, availability: "buy", imageUrl: "/mock_imgs/leather_jacket.png", category: "Tops" },
+      { id: 4, name: "Running Shoes", price: 85, availability: "buy", imageUrl: "/mock_imgs/running_shoes.png", category: "Footwear" },
+      { id: 5, name: "Wool Beanie", price: 20, availability: "rent", imageUrl: "/mock_imgs/beenie.png", category: "Head" },
+      { id: 6, name: "Sweatshirt", price: 40, availability: "buy", imageUrl: "/mock_imgs/sweatshirt.png", category: "Tops" },
+      { id: 7, name: "Formal Trousers", price: 65, availability: "buy", imageUrl: "/mock_imgs/trouser.png", category: "Bottoms" },
+      { id: 8, name: "Slip-on Sneakers", price: 70, availability: "rent", imageUrl: "/mock_imgs/sneakers.png", category: "Footwear" },
+      { id: 9, name: "Fedora Hat", price: 55, availability: "rent", imageUrl: "/mock_imgs/fedore_hat.png", category: "Head" },
+      { id: 10, name: "Winter Coat", price: 150, availability: "buy", imageUrl: "/mock_imgs/winter_coat.png", category: "Tops" },
     ];
   
     const categories = ["Head", "Tops", "Bottoms", "Footwear"];
