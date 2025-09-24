@@ -309,7 +309,7 @@ const App = () => {
   );
 
   const ClosetScreen = () => {
-    const categories = ["Head", "Tops", "Bottoms", "Footwear"];
+    const categories = [, "Tops", "Bottoms", "Footwear"];
     const filteredItems = closetItems.filter(item => item.category === currentCategory);
     const onImageClick = (item) => {
       setSelectedOutfitItems(prev => ({ ...prev, [item.category]: item }));
@@ -468,17 +468,27 @@ const App = () => {
     const products = [
       { id: 1, name: "Casual T-Shirt", price: 25, availability: "buy", imageUrl: "/mock_imgs/tshirt.png", category: "Tops" },
       { id: 2, name: "Blue Jeans", price: 50, availability: "rent", imageUrl: "/mock_imgs/jeans.png", category: "Bottoms" },
-      { id: 3, name: "Leather Jacket", price: 120, availability: "buy", imageUrl: "/mock_imgs/leather_jacket.png", category: "Tops" },
-      { id: 4, name: "Running Shoes", price: 85, availability: "buy", imageUrl: "/mock_imgs/running_shoes.png", category: "Footwear" },
-      { id: 5, name: "Wool Beanie", price: 20, availability: "rent", imageUrl: "/mock_imgs/beenie.png", category: "Head" },
-      { id: 6, name: "Sweatshirt", price: 40, availability: "buy", imageUrl: "/mock_imgs/sweatshirt.png", category: "Tops" },
-      { id: 7, name: "Formal Trousers", price: 65, availability: "buy", imageUrl: "/mock_imgs/trouser.png", category: "Bottoms" },
-      { id: 8, name: "Slip-on Sneakers", price: 70, availability: "rent", imageUrl: "/mock_imgs/sneakers.png", category: "Footwear" },
-      { id: 9, name: "Fedora Hat", price: 55, availability: "rent", imageUrl: "/mock_imgs/fedore_hat.png", category: "Head" },
-      { id: 10, name: "Winter Coat", price: 150, availability: "buy", imageUrl: "/mock_imgs/winter_coat.png", category: "Tops" },
+      { id: 3, name: "Chikan Kurti", price: 30, availability: "buy", imageUrl: "/mock_imgs/chikan_kurti.png", category: "Tops" },
+      { id: 4, name: "Leather Jacket", price: 120, availability: "buy", imageUrl: "/mock_imgs/leather_jacket.png", category: "Tops" },
+      { id: 5, name: "Running Shoes", price: 85, availability: "buy", imageUrl: "/mock_imgs/running_shoes.png", category: "Footwear" },
+      { id: 6, name: "Louboutin Heels", price: 100, availability: "rent", imageUrl: "/mock_imgs/heels.png", category: "Footwear" },
+      { id: 7, name: "Sweatshirt", price: 40, availability: "buy", imageUrl: "/mock_imgs/sweatshirt.png", category: "Tops" },
+      { id: 8, name: "Palazzo", price: 26, availability: "rent", imageUrl: "/mock_imgs/palazzo.png", category: "Bottoms" },
+      { id: 9, name: "Prom Dress", price: 70, availability: "rent", imageUrl: "/mock_imgs/prom_dress.png", category: "Tops" },
+      
+      { id: 10, name: "Satin Nightgown", price: 47, availability: "buy", imageUrl: "/mock_imgs/nightgown.png", category: "Tops" },
+      { id: 11, name: "Cargos", price: 30, availability: "buy", imageUrl: "/mock_imgs/cargos.png", category: "Bottoms" },
+      { id: 12, name: "Denim Shorts", price: 30, availability: "buy", imageUrl: "/mock_imgs/denim_shorts.png", category: "Bottoms" },
+      { id: 13, name: "Adi", price: 3.99, availability: "rent", imageUrl: "/mock_imgs/adi.png", category: "Bottoms" },
+      { id: 14, name: "Bayern Munich Jersey - 125th Anniversary", price: 200, availability: "buy", imageUrl: "/mock_imgs/bayern_jersey.png", category: "Tops" },
+      { id: 15, name: "Nike Travis Scott Mocha Lows", price: 150, availability: "buy", imageUrl: "/mock_imgs/nike_sneakers.png", category: "Footwear" },
+      { id: 16, name: "Trench Coat", price: 150, availability: "buy", imageUrl: "/mock_imgs/winter_coat.png", category: "Tops" },
+      { id: 17, name: "Converse Chuck All Star", price: 90, availability: "buy", imageUrl: "/mock_imgs/converse.png", category: "Footwear" },
+      { id: 18, name: "Formal Trousers", price: 65, availability: "buy", imageUrl: "/mock_imgs/trouser.png", category: "Bottoms" },
+      { id: 19, name: "Slip-on Sneakers", price: 70, availability: "rent", imageUrl: "/mock_imgs/sneakers.png", category: "Footwear" },
     ];
   
-    const categories = ["Head", "Tops", "Bottoms", "Footwear"];
+    const categories = ["Tops", "Bottoms", "Footwear"];
   
     const handleCategoryChange = (category) => {
       setSelectedCategories(prev =>
