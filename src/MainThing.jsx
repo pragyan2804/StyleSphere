@@ -4,6 +4,7 @@ import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, del
 import { useState, useEffect, createContext } from 'react';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import LiquidEther from './LiquidEther';
 
 // Global variables for Firebase configuration.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -61,10 +62,10 @@ const useFirebase = () => {
 };
 
 const Header = ({ title, onBack, rightButtons }) => (
-  <div className="flex items-center justify-between px-6 py-4 bg-stone-900/40 text-stone-200 shadow-sm sticky top-0 z-10 w-full rounded-b-xl backdrop-blur-md">
+  <div className="flex items-center justify-between px-6 py-4 w-full">
     <div className="flex items-center space-x-2">
       {onBack && (
-        <button onClick={onBack} className="p-2 rounded-full hover:bg-stone-800/50 transition-colors glassy-button">
+        <button onClick={onBack} className="p-2 rounded-full hover:bg-stone-800/10 transition-colors">
           <ArrowLeft size={24} className="text-stone-300" />
         </button>
       )}
@@ -77,6 +78,7 @@ const Header = ({ title, onBack, rightButtons }) => (
     </div>
   </div>
 );
+
 
 const App = () => {
   const { auth, db, userId, isAuthReady } = useFirebase();
@@ -221,10 +223,8 @@ const App = () => {
   };
 
   const MainLayout = ({ children }) => (
-    <div className="relative flex flex-col w-full h-screen bg-[#003153] text-stone-200">
-      <div className="absolute inset-0 z-0"></div>
-      <div className="absolute inset-0 radial-glow z-10"></div>
-      <div className="flex flex-col flex-grow overflow-hidden z-20">
+    <div className="relative flex flex-col w-full h-screen bg-transparent text-stone-200">
+      <div className="flex flex-col flex-grow overflow-hidden z-0">
         <Header
           title="StyleSphere"
           onBack={screen !== 'dashboard' ? () => setScreen('dashboard') : null}
@@ -245,10 +245,34 @@ const App = () => {
     </div>
   );
 
-  const LoginSignupScreen = () => (
-    <div className="flex items-center justify-center min-h-screen bg-[#003153] text-stone-200 p-4">
+const LoginSignupScreen = () => (
+    <div className="relative w-full min-h-screen">
+    {/* LiquidEther background with absolute positioning */}
+    <div className="absolute inset-0 -z-10">
+      <LiquidEther
+        colors={['#5227FF', '#FF9FFC', '#B19EEF']}
+        mouseForce={20}
+        cursorSize={100}
+        isViscous={false}
+        viscous={30}
+        iterationsViscous={32}
+        iterationsPoisson={32}
+        resolution={0.5}
+        isBounce={false}
+        autoDemo={true}
+        autoSpeed={0.5}
+        autoIntensity={2.2}
+        takeoverDuration={0.25}
+        autoResumeDelay={3000}
+        autoRampDuration={0.6}
+        style={{ width: '100%', height: '100%' }}
+      />
+    </div>
+    <div className="flex items-center justify-center min-h-screen relative z-10 p-4">
       <div className="w-full bg-stone-800/40 p-8 rounded-2xl shadow-2xl space-y-6 text-center lg:max-w-lg backdrop-blur-md">
-        <h2 className="text-4xl font-bold tracking-wide">Welcome to <span className="font-fugaz text-purple-400">StyleSphere</span></h2>
+        <h2 className="text-4xl font-bold tracking-wide">
+          Welcome to <span className="font-fugaz text-purple-400">StyleSphere</span>
+        </h2>
         <p className="text-stone-400 text-lg">Your personal style curator</p>
         <div className="space-y-4 pt-4">
           <input
@@ -276,37 +300,45 @@ const App = () => {
             NEW USER? CLICK HERE!
           </button>
         </div>
-        <div className="text-sm text-stone-500 mt-6">User ID: <span className="font-mono text-xs">{userId || 'Loading...'}</span></div>
+        <div className="text-sm text-stone-500 mt-6">
+          User ID: <span className="font-mono text-xs">{userId || 'Loading...'}</span>
+        </div>
       </div>
     </div>
-  );
+  </div>
+);
+
+
+
 
   const DashboardScreen = () => (
-    <div className="flex-grow flex items-center justify-center p-8">
-      <div className="flex flex-col md:flex-row gap-8 w-full max-w-5xl">
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex-1 aspect-square flex items-center justify-center p-12 rounded-2xl shadow-2xl cursor-pointer bg-stone-800/40 backdrop-blur-md glassy-card"
-          onClick={() => setScreen('closet')}
-        >
-          <h2 className="text-4xl font-extrabold text-stone-200 px-6 py-3 rounded-xl shadow-lg relative z-10 text-center">
-            My Closet
-          </h2>
-        </motion.div>
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex-1 aspect-square flex items-center justify-center p-12 rounded-2xl shadow-2xl cursor-pointer bg-stone-800/40 backdrop-blur-md glassy-card"
-          onClick={() => setScreen('marketplace')}
-        >
-          <h2 className="text-4xl font-extrabold text-stone-200 px-6 py-3 rounded-xl shadow-lg relative z-10 text-center">
-            Marketplace
-          </h2>
-        </motion.div>
-      </div>
+  <div className="flex items-center justify-center h-full w-full">
+    <div className="flex flex-wrap justify-center gap-12">
+      <motion.div
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        className="min-w-[500px] min-h-[500px] flex items-center justify-center rounded-2xl shadow-2xl cursor-pointer bg-stone-800/40 backdrop-blur-md glassy-card"
+        onClick={() => setScreen('closet')}
+      >
+        <h2 className="text-4xl font-extrabold text-stone-200 text-center">
+          My Closet
+        </h2>
+      </motion.div>
+
+      <motion.div
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        className="min-w-[500px] min-h-[500px] flex items-center justify-center rounded-2xl shadow-2xl cursor-pointer bg-stone-800/40 backdrop-blur-md glassy-card"
+        onClick={() => setScreen('marketplace')}
+      >
+        <h2 className="text-4xl font-extrabold text-stone-200 text-center">
+          Marketplace
+        </h2>
+      </motion.div>
     </div>
-  );
+  </div>
+);
+
 
   const ClosetScreen = () => {
     const categories = ["Head", "Tops", "Bottoms", "Footwear"];
