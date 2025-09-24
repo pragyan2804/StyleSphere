@@ -523,21 +523,33 @@ const LoginSignupScreen = () => (
   const MarketplaceScreen = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategories, setSelectedCategories] = useState([]);
+    const [selectedAvailability, setSelectedAvailability] = useState([]);
+    const [selectedGenders, setSelectedGenders] = useState([]);
   
     const products = [
-      { id: 1, name: "Casual T-Shirt", price: 25, availability: "buy", imageUrl: "https://placehold.co/400x400/3c3c3c/ffffff?text=T-Shirt", category: "Tops" },
-      { id: 2, name: "Blue Jeans", price: 50, availability: "rent", imageUrl: "https://placehold.co/400x400/4c51bf/ffffff?text=Jeans", category: "Bottoms" },
-      { id: 3, name: "Leather Jacket", price: 120, availability: "buy", imageUrl: "https://placehold.co/400x400/667eea/ffffff?text=Jacket", category: "Tops" },
-      { id: 4, name: "Running Shoes", price: 85, availability: "buy", imageUrl: "https://placehold.co/400x400/e53e3e/ffffff?text=Shoes", category: "Footwear" },
-      { id: 5, name: "Wool Beanie", price: 20, availability: "rent", imageUrl: "https://placehold.co/400x400/319795/ffffff?text=Beanie", category: "Head" },
-      { id: 6, name: "Sweatshirt", price: 40, availability: "buy", imageUrl: "https://placehold.co/400x400/2f855a/ffffff?text=Sweatshirt", category: "Tops" },
-      { id: 7, name: "Formal Trousers", price: 65, availability: "buy", imageUrl: "https://placehold.co/400x400/dd6b20/ffffff?text=Trousers", category: "Bottoms" },
-      { id: 8, name: "Slip-on Sneakers", price: 70, availability: "rent", imageUrl: "https://placehold.co/400x400/b794f4/ffffff?text=Sneakers", category: "Footwear" },
-      { id: 9, name: "Fedora Hat", price: 55, availability: "rent", imageUrl: "https://placehold.co/400x400/d53f8c/ffffff?text=Fedora", category: "Head" },
-      { id: 10, name: "Winter Coat", price: 150, availability: "buy", imageUrl: "https://placehold.co/400x400/1a202c/ffffff?text=Coat", category: "Tops" },
+      { id: 1, name: "Casual T-Shirt", price: 500, availability: "buy", imageUrl: "/mock_imgs/tshirt.png", category: "Tops", gender: "Unisex"},
+      { id: 2, name: "Levi's Blue Jeans", price: 400, availability: "rent", imageUrl: "/mock_imgs/jeans.png", category: "Bottoms", gender: "Mens"},
+      { id: 3, name: "Chikan Kurti", price: 700, availability: "buy", imageUrl: "/mock_imgs/chikan_kurti.png", category: "Tops", gender: "Womens" },
+      { id: 4, name: "Leather Jacket", price: 300, availability: "rent", imageUrl: "/mock_imgs/leather_jacket.png", category: "Tops", gender: "Mens" },
+      { id: 5, name: "Running Shoes", price: 1000, availability: "buy", imageUrl: "/mock_imgs/running_shoes.png", category: "Footwear", gender: "Unisex" },
+      { id: 6, name: "Louboutin Heels", price: 3000, availability: "rent", imageUrl: "/mock_imgs/heels.png", category: "Footwear", gender: "Womens" },
+      { id: 7, name: "Hoodie", price: 500, availability: "buy", imageUrl: "/mock_imgs/sweatshirt.png", category: "Tops", gender: "Unisex" },
+      { id: 8, name: "Palazzo", price: 550, availability: "rent", imageUrl: "/mock_imgs/palazzo.png", category: "Bottoms", gender: "Womens"},
+      { id: 9, name: "Prom Dress", price: 400, availability: "rent", imageUrl: "/mock_imgs/prom_dress.png", category: "Tops", gender: "Womens" },
+      { id: 10, name: "Saree", price: 1175, availability: "buy", imageUrl: "/mock_imgs/saree.png", category: "Tops", gender: "Womens" },
+      { id: 11, name: "Cargos", price: 450, availability: "buy", imageUrl: "/mock_imgs/cargos.png", category: "Bottoms", gender: "Unisex" },
+      { id: 12, name: "Denim Shorts", price: 300, availability: "buy", imageUrl: "/mock_imgs/denim_shorts.png", category: "Bottoms", gender: "Womens"},
+      // { id: 13, name: "Adi", price: 2.5, availability: "rent", imageUrl: "/mock_imgs/adi.png", category: "Bottoms", gender: "Mens" },
+      { id: 14, name: "Bayern Munich Jersey - 125th Anniversary", price: 2700, availability: "buy", imageUrl: "/mock_imgs/bayern_jersey.png", category: "Tops", gender: "Unisex" },
+      { id: 15, name: "Nike Travis Scott Mocha Lows", price: 2900, availability: "buy", imageUrl: "/mock_imgs/nike_sneakers.png", category: "Footwear", gender: "Unisex" },
+      { id: 16, name: "Trench Coat", price: 1150, availability: "buy", imageUrl: "/mock_imgs/winter_coat.png", category: "Tops", gender: "Womens" },
+      { id: 17, name: "Converse Chuck All Star", price: 2450, availability: "buy", imageUrl: "/mock_imgs/converse.png", category: "Footwear", gender: "Unisex" },
+      { id: 18, name: "Formal Trousers", price: 655, availability: "buy", imageUrl: "/mock_imgs/trouser.png", category: "Bottoms", gender: "Mens" },
+      { id: 19, name: "Slip-on Sneakers", price: 570, availability: "rent", imageUrl: "/mock_imgs/sneakers.png", category: "Footwear", gender: "Unisex" },
     ];
   
-    const categories = ["Head", "Tops", "Bottoms", "Footwear"];
+    const categories = ["Tops", "Bottoms", "Footwear"];
+    const genders = ["Mens", "Womens", "Unisex"];
   
     const handleCategoryChange = (category) => {
       setSelectedCategories(prev =>
@@ -546,18 +558,58 @@ const LoginSignupScreen = () => (
           : [...prev, category]
       );
     };
-  
+    const handleAvailabilityChange = (availability) => {
+      setSelectedAvailability(prev => 
+        prev.includes(availability) ? prev.filter(a => a !== availability) : [...prev, availability]
+      );
+    };
+    const handleGenderChange = (gender) => {
+        setSelectedGenders(prev => 
+            prev.includes(gender)
+                ? prev.filter(g => g !== gender)
+                : [...prev, gender]
+        );
+    };
+
     const filteredProducts = products.filter(product => {
       const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(product.category);
-      return matchesCategory;
+      const matchesAvailability = selectedAvailability.length === 0 || selectedAvailability.includes(product.availability);
+      
+      // ⭐ UPDATED FILTER LOGIC FOR GENDER ⭐
+      // No filter is applied if selectedGenders is empty.
+      const matchesGender = selectedGenders.length === 0 || selectedGenders.includes(product.gender);
+
+      // All filters must match
+      return matchesCategory && matchesAvailability && matchesGender;
     });
-  
+    
     return (
       <div className="flex-grow flex flex-col p-6 space-y-6">
         <div className="flex flex-col lg:flex-row flex-grow w-full space-y-4 lg:space-y-0 lg:space-x-6">
           <div className="flex-shrink-0 w-full lg:w-72 bg-stone-800/40 p-6 rounded-2xl shadow-lg backdrop-blur-md glassy-card">
             <h3 className="text-xl font-bold text-stone-200 mb-4">Filters</h3>
             <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold text-stone-300 mb-2">Gender</h4>
+                <div className="space-y-2">
+                  {genders.map(g => (
+                    <label key={g} className="flex items-center space-x-2 text-stone-400">
+                        <input
+                            type="checkbox"
+                            checked={selectedGenders.includes(g)}
+                            onChange={() => handleGenderChange(g)}
+                            className="rounded text-purple-600 glassy-checkbox" 
+                        />
+                        <span>{g}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              
+              
+              
+              
+              
               <div>
                 <h4 className="font-semibold text-stone-300 mb-2">Category</h4>
                 <div className="space-y-2">
@@ -578,11 +630,25 @@ const LoginSignupScreen = () => (
                 <h4 className="font-semibold text-stone-300 mb-2">Availability</h4>
                 <div className="space-y-2">
                   <label className="flex items-center space-x-2 text-stone-400">
-                    <input type="checkbox" className="rounded text-purple-600 glassy-checkbox" />
+                    <input 
+                      type="checkbox" 
+                      // 1. Bind 'checked' state
+                      checked={selectedAvailability.includes('buy')} 
+                      // 2. Bind 'onChange' handler
+                      onChange={() => handleAvailabilityChange('buy')} 
+                      className="rounded text-purple-600 glassy-checkbox" 
+                    />
                     <span>Buy</span>
                   </label>
                   <label className="flex items-center space-x-2 text-stone-400">
-                    <input type="checkbox" className="rounded text-purple-600 glassy-checkbox" />
+                    <input 
+                      type="checkbox" 
+                      // 1. Bind 'checked' state
+                      checked={selectedAvailability.includes('rent')} 
+                      // 2. Bind 'onChange' handler
+                      onChange={() => handleAvailabilityChange('rent')} 
+                      className="rounded text-purple-600 glassy-checkbox" 
+                    />
                     <span>Rent</span>
                   </label>
                 </div>
@@ -607,7 +673,7 @@ const LoginSignupScreen = () => (
                     <h3 className="font-bold text-stone-200">{product.name}</h3>
                     <p className="text-sm text-stone-400">{product.category}</p>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="text-lg font-bold text-purple-600">${product.price}</span>
+                      <span className="text-lg font-bold text-purple-600">₹{product.price}</span>
                       <button className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors glassy-button-marketplace ${
                         product.availability === "buy" ? "bg-purple-600/60 hover:bg-purple-700/60" : "bg-teal-500/60 hover:bg-teal-600/60"
                       }`}>
@@ -781,3 +847,4 @@ const LoginSignupScreen = () => (
 };
 
 export default App;
+
