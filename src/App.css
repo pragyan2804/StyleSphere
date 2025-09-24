@@ -1,0 +1,30 @@
+/* File: src/App.css */
+.fixed-screen {
+  width: 1920px;
+  height: 1080px;
+  margin: 0 auto;
+  overflow: hidden;
+  transform-origin: top left;
+}
+
+/* Scale proportionally on smaller screens */
+body {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: hidden;
+}
+
+@media (max-width: 1920px) {
+  .fixed-screen {
+    transform: scale(calc(100vw / 1920));
+  }
+}
+
+@media (max-height: 1080px) {
+  .fixed-screen {
+    transform: scale(calc(100vh / 1080));
+  }
+}
