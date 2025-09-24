@@ -480,7 +480,7 @@ const App = () => {
       { id: 10, name: "Saree", price: 1175, availability: "buy", imageUrl: "/mock_imgs/saree.png", category: "Tops", gender: "Womens" },
       { id: 11, name: "Cargos", price: 450, availability: "buy", imageUrl: "/mock_imgs/cargos.png", category: "Bottoms", gender: "Unisex" },
       { id: 12, name: "Denim Shorts", price: 300, availability: "buy", imageUrl: "/mock_imgs/denim_shorts.png", category: "Bottoms", gender: "Womens"},
-      { id: 13, name: "Adi", price: 2.5, availability: "rent", imageUrl: "/mock_imgs/adi.png", category: "Bottoms", gender: "Mens" },
+      // { id: 13, name: "Adi", price: 2.5, availability: "rent", imageUrl: "/mock_imgs/adi.png", category: "Bottoms", gender: "Mens" },
       { id: 14, name: "Bayern Munich Jersey - 125th Anniversary", price: 2700, availability: "buy", imageUrl: "/mock_imgs/bayern_jersey.png", category: "Tops", gender: "Unisex" },
       { id: 15, name: "Nike Travis Scott Mocha Lows", price: 2900, availability: "buy", imageUrl: "/mock_imgs/nike_sneakers.png", category: "Footwear", gender: "Unisex" },
       { id: 16, name: "Trench Coat", price: 1150, availability: "buy", imageUrl: "/mock_imgs/winter_coat.png", category: "Tops", gender: "Womens" },
@@ -788,3 +788,4 @@ const App = () => {
 };
 
 export default App;
+
