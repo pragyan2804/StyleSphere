@@ -1,6 +1,6 @@
 // File: src/App.jsx
 import React from 'react';
-import MainThing from './mainthing'; // import your current main app component
+import MainThing from './MainThing'; // import your current main app component
 import './App.css';
 
 function App() {

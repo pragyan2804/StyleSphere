@@ -269,12 +269,12 @@ const App = () => {
           >
             Login
           </button>
-          <signupbutton
+          <button
             onClick={handleLoginSignup}
             className="w-full text-sm text-purple-500 font-semibold py-2 rounded-lg glassy-button-secondary"
           >
             NEW USER? CLICK HERE!
-          </signupbutton>
+          </button>
         </div>
         <div className="text-sm text-stone-500 mt-6">User ID: <span className="font-mono text-xs">{userId || 'Loading...'}</span></div>
       </div>
