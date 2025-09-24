@@ -91,7 +91,7 @@ const App = () => {
     { id:108, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/converse.png", name: "Blue T-shirt" },
     { id:109, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/winter_coat.png", name: "Chikan Kurti" },
     { id:110, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/trouser.png", name: "Chikan Kurti" },
-    { id:111, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/adi.png", name: "Chikan Kurti" },
+    // { id:111, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/adi.png", name: "Chikan Kurti" },
     { id:112, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/leather_jacket.png", name: "Chikan Kurti" },
     { id:113, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/palazzo.png", name: "Chikan Kurti" },
   ];
