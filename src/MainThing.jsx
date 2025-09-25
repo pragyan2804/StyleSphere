@@ -5,6 +5,14 @@ import { useState, useEffect, createContext } from 'react';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import LiquidEther from './LiquidEther';
+<<<<<<< Updated upstream
+=======
+import PrismaticBurst from './PrismaticBurst';
+import Orb from './Orb';
+import Aurora from './Aurora';
+import FlowingMenu from './FlowingMenu'
+
+>>>>>>> Stashed changes
 
 // Global variables for Firebase configuration.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -309,9 +317,17 @@ const LoginSignupScreen = () => (
 );
 
 
-
+  const demoItems = [
+  { 
+  text: 'Virtual Closet',
+  image: '/buttons/closet.png',
+  onClick: () => setScreen('closet')
+},
+  { onClick: 'marketplace', text: 'Marketplace', image: '/buttons/marketplace.png' }
+];
 
   const DashboardScreen = () => (
+<<<<<<< Updated upstream
   <div className="flex items-center justify-center h-full w-full">
     <div className="flex flex-wrap justify-center gap-12">
       <motion.div
@@ -336,6 +352,10 @@ const LoginSignupScreen = () => (
         </h2>
       </motion.div>
     </div>
+=======
+    <div style={{ height: '600px', position: 'relative' }}>
+  <FlowingMenu items={demoItems} />
+>>>>>>> Stashed changes
   </div>
 );
 
