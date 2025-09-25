@@ -5,6 +5,10 @@ import { useState, useEffect, createContext } from 'react';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import LiquidEther from './LiquidEther';
+import PrismaticBurst from './PrismaticBurst';
+import Orb from './Orb';
+import Aurora from './Aurora';
+
 
 // Global variables for Firebase configuration.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -238,6 +242,14 @@ const App = () => {
 
   const MainLayout = ({ children }) => (
     <div className="relative flex flex-col w-full h-screen bg-transparent text-stone-200">
+      <div className="absolute inset-0 -z-10 bg-black overflow-hidden" >
+        <Orb
+        hoverIntensity={0.5}
+        rotateOnHover={true}
+        hue={0}
+        forceHoverState={false}
+      />
+      </div>
       <div className="flex flex-col flex-grow overflow-hidden z-0">
         <Header
           title="StyleSphere"
@@ -262,13 +274,13 @@ const App = () => {
 const LoginSignupScreen = () => (
     <div className="relative w-full min-h-screen">
     {/* LiquidEther background with absolute positioning */}
-    <div className="absolute inset-0 -z-10">
+    <div className="absolute inset-0 -z-10 bg-black">
       <LiquidEther
         colors={['#5227FF', '#FF9FFC', '#B19EEF']}
-        mouseForce={20}
+        mouseForce={70}
         cursorSize={100}
         isViscous={false}
-        viscous={30}
+        viscous={80}
         iterationsViscous={32}
         iterationsPoisson={32}
         resolution={0.5}
@@ -276,18 +288,20 @@ const LoginSignupScreen = () => (
         autoDemo={true}
         autoSpeed={0.5}
         autoIntensity={2.2}
-        takeoverDuration={0.25}
-        autoResumeDelay={3000}
+        takeoverDuration={0.1}
+        autoResumeDelay={1000}
         autoRampDuration={0.6}
         style={{ width: '100%', height: '100%' }}
       />
     </div>
     <div className="flex items-center justify-center min-h-screen relative z-10 p-4">
-      <div className="w-full bg-stone-800/40 p-8 rounded-2xl shadow-2xl space-y-6 text-center lg:max-w-lg backdrop-blur-md">
-        <h2 className="text-4xl font-bold tracking-wide">
-          Welcome to <span className="font-fugaz text-purple-400">StyleSphere</span>
-        </h2>
-        <p className="text-stone-400 text-lg">Your personal style curator</p>
+      <div className="w-full p-8 rounded-2xl shadow-2xl space-y-6 text-center lg:max-w-lg backdrop-blur-md">
+        <h1 className="text-4xl font-bold tracking-wide">
+          Welcome to{' '}
+          <span className="font-fugaz text-purple-500 text-7xl inline-block">
+            StyleSphere
+          </span>
+        </h1>
         <div className="space-y-4 pt-4">
           <input
             type="email"
@@ -326,15 +340,15 @@ const LoginSignupScreen = () => (
 
 
   const DashboardScreen = () => (
-  <div className="flex items-center justify-center h-full w-full">
-    <div className="flex flex-wrap justify-center gap-12">
+  <div className="absolute inset-0 w-full h-screen flex items-center justify-center">
+    <div className="flex gap-12 z-10">
       <motion.div
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="min-w-[500px] min-h-[500px] flex items-center justify-center rounded-2xl shadow-2xl cursor-pointer bg-stone-800/40 backdrop-blur-md glassy-card"
+        className="w-96 h-96 p-8 rounded-2xl shadow-2xl text-center backdrop-blur-md flex items-center justify-center"
         onClick={() => setScreen('closet')}
       >
-        <h2 className="text-4xl font-extrabold text-stone-200 text-center">
+        <h2 className="text-4xl font-extrabold text-stone-200">
           My Closet
         </h2>
       </motion.div>
@@ -342,10 +356,10 @@ const LoginSignupScreen = () => (
       <motion.div
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="min-w-[500px] min-h-[500px] flex items-center justify-center rounded-2xl shadow-2xl cursor-pointer bg-stone-800/40 backdrop-blur-md glassy-card"
+        className="w-96 h-96 p-8 rounded-2xl shadow-2xl text-center backdrop-blur-md flex items-center justify-center"
         onClick={() => setScreen('marketplace')}
       >
-        <h2 className="text-4xl font-extrabold text-stone-200 text-center">
+        <h2 className="text-4xl font-extrabold text-stone-200">
           Marketplace
         </h2>
       </motion.div>
@@ -370,7 +384,7 @@ const LoginSignupScreen = () => (
   return (
     <div className="flex flex-grow w-full overflow-hidden p-6">
       <div className="flex flex-col lg:flex-row flex-grow w-full space-y-4 lg:space-y-0 lg:space-x-6">
-        <div className="flex-grow flex flex-col p-4 bg-stone-800/40 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md glassy-card">
+        <div className="flex-grow flex flex-col p-4 rounded-2xl shadow-xl overflow-hidden backdrop-blur-md">
           <div className="flex overflow-x-auto space-x-2 pb-4 no-scrollbar">
             <button
               onClick={() => setSelectedFilter("All")}
@@ -427,7 +441,7 @@ const LoginSignupScreen = () => (
           </div>
         </div>
       
-          <div className="flex-shrink-0 w-full lg:w-96 bg-stone-800/40 p-6 rounded-2xl shadow-xl flex flex-col items-center space-y-4 backdrop-blur-md glassy-card">
+          <div className="flex-shrink-0 w-full lg:w-96 p-6 rounded-2xl shadow-xl flex flex-col items-center space-y-4 backdrop-blur-md">
             <h3 className="text-xl font-bold text-stone-200">Outfit of the Day</h3>
             <div className="w-full space-y-3">
               {categories.map(category => (
@@ -586,7 +600,7 @@ const LoginSignupScreen = () => (
     return (
       <div className="flex-grow flex flex-col p-6 space-y-6">
         <div className="flex flex-col lg:flex-row flex-grow w-full space-y-4 lg:space-y-0 lg:space-x-6">
-          <div className="flex-shrink-0 w-full lg:w-72 bg-stone-800/40 p-6 rounded-2xl shadow-lg backdrop-blur-md glassy-card">
+          <div className="flex-shrink-0 w-full lg:w-72 p-6 rounded-2xl shadow-lg backdrop-blur-md">
             <h3 className="text-xl font-bold text-stone-200 mb-4">Filters</h3>
             <div className="space-y-4">
               <div>
@@ -847,4 +861,3 @@ const LoginSignupScreen = () => (
 };
 
 export default App;
-

@@ -18,14 +18,11 @@ body {
   overflow: hidden;
 }
 
-@media (max-width: 1920px) {
-  .fixed-screen {
-    transform: scale(calc(100vw / 1920));
-  }
-}
-
-@media (max-height: 1080px) {
-  .fixed-screen {
-    transform: scale(calc(100vh / 1080));
-  }
+.fixed-screen {
+  transform-origin: top left; /* scale from top-left corner */
+  transform: scale(
+    min(100vw / 1920, 100vh / 1080)
+  );
+  width: 1920px;
+  height: 1080px;
 }
