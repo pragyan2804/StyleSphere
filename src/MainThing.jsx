@@ -2,7 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { useState, useEffect, createContext } from 'react';
-import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import LiquidEther from './LiquidEther';
 import PrismaticBurst from './PrismaticBurst';
@@ -23,7 +23,7 @@ const useFirebase = () => {
   const [auth, setAuth] = useState(null);
   const [db, setDb] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);  
 
   useEffect(() => {
     try {
@@ -97,12 +97,36 @@ const App = () => {
     { id:108, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/converse.png", name: "Blue T-shirt" },
     { id:109, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/winter_coat.png", name: "Chikan Kurti" },
     { id:110, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/trouser.png", name: "Chikan Kurti" },
-    // { id:111, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/adi.png", name: "Chikan Kurti" },
+    { id:111, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/adi.png", name: "Chikan Kurti" },
     { id:112, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/leather_jacket.png", name: "Chikan Kurti" },
     { id:113, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/palazzo.png", name: "Chikan Kurti" },
   ];
   const [screen, setScreen] = useState('login');
   const [closetItems, setClosetItems] = useState(dummyItems);
+  // Marketplace products (moved here so UploadModal can add items)
+  const [marketplaceProducts, setMarketplaceProducts] = useState([
+    { id: 1, name: "Casual T-Shirt", price: 500, availability: "buy", imageUrl: "/mock_imgs/tshirt.png", category: "Tops", gender: "Unisex"},
+    { id: 2, name: "Levi's Blue Jeans", price: 400, availability: "rent", imageUrl: "/mock_imgs/jeans.png", category: "Bottoms", gender: "Mens"},
+    { id: 3, name: "Chikan Kurti", price: 700, availability: "buy", imageUrl: "/mock_imgs/chikan_kurti.png", category: "Tops", gender: "Womens" },
+    { id: 4, name: "Leather Jacket", price: 300, availability: "rent", imageUrl: "/mock_imgs/leather_jacket.png", category: "Tops", gender: "Mens" },
+    { id: 5, name: "Running Shoes", price: 1000, availability: "buy", imageUrl: "/mock_imgs/running_shoes.png", category: "Footwear", gender: "Unisex" },
+    { id: 6, name: "Louboutin Heels", price: 3000, availability: "rent", imageUrl: "/mock_imgs/heels.png", category: "Footwear", gender: "Womens" },
+    { id: 7, name: "Hoodie", price: 500, availability: "buy", imageUrl: "/mock_imgs/sweatshirt.png", category: "Tops", gender: "Unisex" },
+    { id: 8, name: "Palazzo", price: 550, availability: "rent", imageUrl: "/mock_imgs/palazzo.png", category: "Bottoms", gender: "Womens"},
+    { id: 9, name: "Prom Dress", price: 400, availability: "rent", imageUrl: "/mock_imgs/prom_dress.png", category: "Tops", gender: "Womens" },
+    { id: 10, name: "Saree", price: 1175, availability: "buy", imageUrl: "/mock_imgs/saree.png", category: "Tops", gender: "Womens" },
+    { id: 11, name: "Cargos", price: 450, availability: "buy", imageUrl: "/mock_imgs/cargos.png", category: "Bottoms", gender: "Unisex" },
+    { id: 12, name: "Denim Shorts", price: 300, availability: "buy", imageUrl: "/mock_imgs/denim_shorts.png", category: "Bottoms", gender: "Womens"},
+    { id: 14, name: "Bayern Munich Jersey - 125th Anniversary", price: 2700, availability: "buy", imageUrl: "/mock_imgs/bayern_jersey.png", category: "Tops", gender: "Unisex" },
+    { id: 15, name: "Nike Travis Scott Mocha Lows", price: 2900, availability: "buy", imageUrl: "/mock_imgs/nike_sneakers.png", category: "Footwear", gender: "Unisex" },
+    { id: 16, name: "Trench Coat", price: 1150, availability: "buy", imageUrl: "/mock_imgs/winter_coat.png", category: "Tops", gender: "Womens" },
+    { id: 17, name: "Converse Chuck All Star", price: 2450, availability: "buy", imageUrl: "/mock_imgs/converse.png", category: "Footwear", gender: "Unisex" },
+    { id: 18, name: "Formal Trousers", price: 655, availability: "buy", imageUrl: "/mock_imgs/trouser.png", category: "Bottoms", gender: "Mens" },
+    { id: 19, name: "Slip-on Sneakers", price: 570, availability: "rent", imageUrl: "/mock_imgs/sneakers.png", category: "Footwear", gender: "Unisex" },
+  ]);
+
+  // Upload modal visibility
+  const [isUploadModalVisible, setIsUploadModalVisible] = useState(false);
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [selectedOutfitItems, setSelectedOutfitItems] = useState({
     Tops: null,
@@ -242,6 +266,7 @@ const App = () => {
 
   const MainLayout = ({ children }) => (
     <div className="relative flex flex-col w-full h-screen bg-transparent text-stone-200">
+      {/* top-right upload button removed (upload action moved above Filters in Marketplace) */}
       <div className="absolute inset-0 -z-10 bg-black overflow-hidden" >
         <Orb
         hoverIntensity={0.5}
@@ -534,33 +559,231 @@ const LoginSignupScreen = () => (
     </div>
   );
   
+  // --- UTILITIES ---
+
+// 1. Unique ID generator (essential for new items)
+const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2);
+
+// 2. Mock Toast Notification (temporary replacement for the 'showToast' prop)
+const mockShowToast = (message, type = 'info') => {
+  // We use console logging as a temporary notification method
+  console.log(`[TOAST ${type.toUpperCase()}]: ${message}`);
+  // In a real app, this would update a global UI component
+  alert(`${type.toUpperCase()}: ${message}`); // Using alert as a quick visible fallback in case console isn't checked
+};
+
+// --- UPLOAD MODAL COMPONENT ---
+
+const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
+  const [form, setForm] = useState({
+    name: '',
+    price: '',
+    category: categories[0] || 'Tops',
+    availability: 'buy',
+    gender: 'Unisex',
+    file: null,
+    imagePreviewUrl: null,
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      // Clean up previous object URL to free memory
+      if (form.imagePreviewUrl) {
+        URL.revokeObjectURL(form.imagePreviewUrl);
+      }
+      const url = URL.createObjectURL(file);
+      setForm(prev => ({ ...prev, file, imagePreviewUrl: url }));
+    } else {
+      setForm(prev => ({ ...prev, file: null, imagePreviewUrl: null }));
+      mockShowToast("Please select a valid image file.", "error");
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const { name, price, category, availability, gender, imagePreviewUrl } = form;
+
+    if (!name || !price || !imagePreviewUrl) {
+      mockShowToast("Please fill all required fields and select an image.", "error");
+      return;
+    }
+
+    // In a real app, 'imageUrl' would be the URL returned from Firebase Storage.
+    const newProduct = {
+      id: generateId(), 
+      name,
+      price: parseInt(price),
+      category,
+      availability,
+      gender,
+      // Using the temporary local URL for immediate visual feedback in this demo
+      imageUrl: imagePreviewUrl, 
+    };
+
+    onUpload(newProduct);
+
+    // Reset form and close modal
+    setForm({
+      name: '',
+      price: '',
+      category: categories[0] || 'Tops',
+      availability: 'buy',
+      gender: 'Unisex',
+      file: null,
+      imagePreviewUrl: null,
+    });
+    // Clean up the URL after the item is uploaded and the form is closed/reset
+    if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+    }
+    onClose();
+  };
+
+  if (!isVisible) return null;
+
+  // Backdrop and Modal Content
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+      <div className="bg-stone-800 p-6 rounded-xl w-full max-w-lg shadow-2xl border border-purple-700/50">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white flex items-center space-x-2">
+            <Upload className="text-yellow-400" size={24} />
+            <span>List Item for Marketplace</span>
+          </h2>
+          <button onClick={onClose} className="p-2 text-stone-400 hover:text-white rounded-full transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          
+          <div className="flex flex-col">
+            <label htmlFor="productName" className="text-stone-300 mb-1 font-medium">Product Name</label>
+            <input
+              id="productName"
+              type="text"
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              className="p-3 rounded-lg bg-stone-700 text-white border border-stone-600 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-colors"
+              placeholder="e.g., Vintage Denim Jacket"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col">
+              <label htmlFor="price" className="text-stone-300 mb-1 font-medium">Price (₹)</label>
+              <input
+                id="price"
+                type="number"
+                name="price"
+                value={form.price}
+                onChange={handleChange}
+                className="p-3 rounded-lg bg-stone-700 text-white border border-stone-600 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-colors"
+                placeholder="e.g., 999"
+                min="1"
+                required
+              />
+            </div>
+            
+            <div className="flex flex-col">
+              <label htmlFor="availability" className="text-stone-300 mb-1 font-medium">Availability</label>
+              <select
+                id="availability"
+                name="availability"
+                value={form.availability}
+                onChange={handleChange}
+                className="p-3 rounded-lg bg-stone-700 text-white border border-stone-600 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-colors appearance-none"
+              >
+                <option value="buy">Buy</option>
+                <option value="rent">Rent</option>
+              </select>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col">
+              <label htmlFor="category" className="text-stone-300 mb-1 font-medium">Category</label>
+              <select
+                id="category"
+                name="category"
+                value={form.category}
+                onChange={handleChange}
+                className="p-3 rounded-lg bg-stone-700 text-white border border-stone-600 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-colors appearance-none"
+              >
+                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </div>
+            
+            <div className="flex flex-col">
+              <label htmlFor="gender" className="text-stone-300 mb-1 font-medium">Gender</label>
+              <select
+                id="gender"
+                name="gender"
+                value={form.gender}
+                onChange={handleChange}
+                className="p-3 rounded-lg bg-stone-700 text-white border border-stone-600 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-colors appearance-none"
+              >
+                <option value="Unisex">Unisex</option>
+                <option value="Mens">Mens</option>
+                <option value="Womens">Womens</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center border border-dashed border-stone-600 p-4 rounded-lg">
+            <label htmlFor="file-upload" className="text-yellow-400 cursor-pointer flex items-center space-x-2 hover:text-yellow-300 transition-colors">
+              <Camera size={20} />
+              <span className="font-semibold">Choose Product Image</span>
+            </label>
+            <input
+              id="file-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+              required
+            />
+            {form.imagePreviewUrl ? (
+              <img 
+                src={form.imagePreviewUrl} 
+                alt="Product Preview" 
+                className="mt-3 w-32 h-32 object-cover rounded-md shadow-md"
+              />
+            ) : (
+              <p className="text-sm text-stone-500 mt-2">No image selected</p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="w-full flex items-center justify-center space-x-2 text-white font-bold py-3 rounded-lg shadow-lg bg-yellow-600 hover:bg-yellow-700 transition-colors"
+          >
+            <DollarSign size={20} />
+            <span>List Item for {form.availability === 'buy' ? 'Sale' : 'Rent'}</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+
   const MarketplaceScreen = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [selectedAvailability, setSelectedAvailability] = useState([]);
     const [selectedGenders, setSelectedGenders] = useState([]);
+    
   
-    const products = [
-      { id: 1, name: "Casual T-Shirt", price: 500, availability: "buy", imageUrl: "/mock_imgs/tshirt.png", category: "Tops", gender: "Unisex"},
-      { id: 2, name: "Levi's Blue Jeans", price: 400, availability: "rent", imageUrl: "/mock_imgs/jeans.png", category: "Bottoms", gender: "Mens"},
-      { id: 3, name: "Chikan Kurti", price: 700, availability: "buy", imageUrl: "/mock_imgs/chikan_kurti.png", category: "Tops", gender: "Womens" },
-      { id: 4, name: "Leather Jacket", price: 300, availability: "rent", imageUrl: "/mock_imgs/leather_jacket.png", category: "Tops", gender: "Mens" },
-      { id: 5, name: "Running Shoes", price: 1000, availability: "buy", imageUrl: "/mock_imgs/running_shoes.png", category: "Footwear", gender: "Unisex" },
-      { id: 6, name: "Louboutin Heels", price: 3000, availability: "rent", imageUrl: "/mock_imgs/heels.png", category: "Footwear", gender: "Womens" },
-      { id: 7, name: "Hoodie", price: 500, availability: "buy", imageUrl: "/mock_imgs/sweatshirt.png", category: "Tops", gender: "Unisex" },
-      { id: 8, name: "Palazzo", price: 550, availability: "rent", imageUrl: "/mock_imgs/palazzo.png", category: "Bottoms", gender: "Womens"},
-      { id: 9, name: "Prom Dress", price: 400, availability: "rent", imageUrl: "/mock_imgs/prom_dress.png", category: "Tops", gender: "Womens" },
-      { id: 10, name: "Saree", price: 1175, availability: "buy", imageUrl: "/mock_imgs/saree.png", category: "Tops", gender: "Womens" },
-      { id: 11, name: "Cargos", price: 450, availability: "buy", imageUrl: "/mock_imgs/cargos.png", category: "Bottoms", gender: "Unisex" },
-      { id: 12, name: "Denim Shorts", price: 300, availability: "buy", imageUrl: "/mock_imgs/denim_shorts.png", category: "Bottoms", gender: "Womens"},
-      // { id: 13, name: "Adi", price: 2.5, availability: "rent", imageUrl: "/mock_imgs/adi.png", category: "Bottoms", gender: "Mens" },
-      { id: 14, name: "Bayern Munich Jersey - 125th Anniversary", price: 2700, availability: "buy", imageUrl: "/mock_imgs/bayern_jersey.png", category: "Tops", gender: "Unisex" },
-      { id: 15, name: "Nike Travis Scott Mocha Lows", price: 2900, availability: "buy", imageUrl: "/mock_imgs/nike_sneakers.png", category: "Footwear", gender: "Unisex" },
-      { id: 16, name: "Trench Coat", price: 1150, availability: "buy", imageUrl: "/mock_imgs/winter_coat.png", category: "Tops", gender: "Womens" },
-      { id: 17, name: "Converse Chuck All Star", price: 2450, availability: "buy", imageUrl: "/mock_imgs/converse.png", category: "Footwear", gender: "Unisex" },
-      { id: 18, name: "Formal Trousers", price: 655, availability: "buy", imageUrl: "/mock_imgs/trouser.png", category: "Bottoms", gender: "Mens" },
-      { id: 19, name: "Slip-on Sneakers", price: 570, availability: "rent", imageUrl: "/mock_imgs/sneakers.png", category: "Footwear", gender: "Unisex" },
-    ];
+    // products moved to parent state: marketplaceProducts
   
     const categories = ["Tops", "Bottoms", "Footwear"];
     const genders = ["Mens", "Womens", "Unisex"];
@@ -585,7 +808,7 @@ const LoginSignupScreen = () => (
         );
     };
 
-    const filteredProducts = products.filter(product => {
+  const filteredProducts = marketplaceProducts.filter(product => {
       const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(product.category);
       const matchesAvailability = selectedAvailability.length === 0 || selectedAvailability.includes(product.availability);
       
@@ -594,13 +817,25 @@ const LoginSignupScreen = () => (
       const matchesGender = selectedGenders.length === 0 || selectedGenders.includes(product.gender);
 
       // All filters must match
-      return matchesCategory && matchesAvailability && matchesGender;
+    return matchesCategory && matchesAvailability && matchesGender;
     });
-    
+
     return (
       <div className="flex-grow flex flex-col p-6 space-y-6">
         <div className="flex flex-col lg:flex-row flex-grow w-full space-y-4 lg:space-y-0 lg:space-x-6">
           <div className="flex-shrink-0 w-full lg:w-72 p-6 rounded-2xl shadow-lg backdrop-blur-md">
+            <div className="mb-4">
+              <h3 className="text-xl font-bold text-white-400 mb-2">Upload items</h3>
+              
+              <button
+                onClick={() => setIsUploadModalVisible(true)}
+                className="w-full flex items-center justify-center space-x-2 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-lg font-semibold transition-colors duration-200"
+              >
+                <PlusCircle size={18} />
+                <span>Upload item</span>
+              </button>
+
+            </div>
             <h3 className="text-xl font-bold text-stone-200 mb-4">Filters</h3>
             <div className="space-y-4">
               <div>
@@ -619,11 +854,7 @@ const LoginSignupScreen = () => (
                   ))}
                 </div>
               </div>
-              
-              
-              
-              
-              
+
               <div>
                 <h4 className="font-semibold text-stone-300 mb-2">Category</h4>
                 <div className="space-y-2">
@@ -679,9 +910,7 @@ const LoginSignupScreen = () => (
                       alt={product.name}
                       className="w-full h-64 object-cover object-center transform group-hover:scale-105 transition-transform duration-300"
                     />
-                    <div className="absolute top-2 right-2 p-2 bg-stone-900/50 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 glassy-button">
-                      <Heart size={20} className="text-stone-400 hover:text-red-500" />
-                    </div>
+                    {/* favourite button removed as requested */}
                   </div>
                   <div className="p-4">
                     <h3 className="font-bold text-stone-200">{product.name}</h3>
@@ -707,6 +936,14 @@ const LoginSignupScreen = () => (
       </div>
     );
   };
+  
+      // Upload modal instance (global within App)
+      const handleMarketplaceUpload = (newProduct) => {
+        // ensure id uniqueness
+        if (!newProduct.id) newProduct.id = generateId();
+        setMarketplaceProducts(prev => [newProduct, ...prev]);
+        showToast('Item listed on marketplace!', 'success');
+      };
   
   return (
     <AppContext.Provider value={{ setScreen, showToast, isAuthReady, userId }}>
@@ -840,6 +1077,13 @@ const LoginSignupScreen = () => (
             Loading...
           </div>
         )}
+        {/* Upload modal rendered at app root so it's accessible from anywhere */}
+        <UploadModal
+          isVisible={isUploadModalVisible}
+          onClose={() => setIsUploadModalVisible(false)}
+          onUpload={handleMarketplaceUpload}
+          categories={["Tops", "Bottoms", "Footwear"]}
+        />
         <AnimatePresence>
           {isToastVisible && (
             <motion.div
