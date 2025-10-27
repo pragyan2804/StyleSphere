@@ -1,14 +1,18 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { useState, useEffect, createContext } from 'react';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 // Global variables for Firebase configuration.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+// No Firebase config here — user will configure Firebase in a separate file/environment.
+// Keep firebaseConfig empty so the app uses local fallback storage until configured.
+const firebaseConfig = {};
+const initialAuthToken = null;
 
 // Context for sharing app state
 const AppContext = createContext();
@@ -28,6 +32,7 @@ const useFirebase = () => {
         const dbInstance = getFirestore(app);
         setAuth(authInstance);
         setDb(dbInstance);
+        console.debug('Firebase initialized with config:', firebaseConfig);
 
         const authenticate = async () => {
           try {
@@ -38,6 +43,7 @@ const useFirebase = () => {
             }
             if (authInstance.currentUser) {
               setUserId(authInstance.currentUser.uid);
+              console.debug('Firebase auth user id:', authInstance.currentUser.uid);
             }
           } catch (error) {
             console.error("Firebase Auth Error:", error);
@@ -103,7 +109,7 @@ const App = () => {
     Bottoms: null,
     Footwear: null,
   });
-  const [currentCategory, setCurrentCategory] = useState('Head');
+  //const [currentCategory, setCurrentCategory] = useState('Head'); no use as of
   const [isToastVisible, setIsToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success'); // 'success' or 'error'
@@ -115,6 +121,7 @@ const App = () => {
 
       const unsubscribeCloset = onSnapshot(closetRef, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.debug('Firestore closet snapshot received:', items);
         setClosetItems(items);
       }, (error) => {
         console.error("Error fetching closet items:", error);
@@ -134,6 +141,24 @@ const App = () => {
     }
   }, [db, userId]);
 
+  // Load locally persisted closet items when Firebase is not configured
+  useEffect(() => {
+    try {
+      if (!db || !userId) {
+        const stored = localStorage.getItem('local_closet_items');
+        if (stored) {
+          const parsedLocal = JSON.parse(stored);
+          if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
+            // Merge local uploads with dummy items so UI has content
+            setClosetItems(parsedLocal.concat(dummyItems));
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error loading local closet items:', e);
+    }
+  }, [db, userId]);
+
   const showToast = (message, type) => {
     setToastMessage(message);
     setToastType(type);
@@ -146,26 +171,71 @@ const App = () => {
   };
 
   const handleUploadImage = async (category, file) => {
+    console.debug('handleUploadImage called with category, file:', category, file);
+    // If Firebase isn't configured, save locally to localStorage and update state
     if (!db || !userId) {
-      showToast("Database not initialized. Please try again.", "error");
+      try {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const imageUrl = e.target.result;
+          const newItem = {
+            id: `local-${Date.now()}`,
+            category,
+            imageUrl,
+            name: file.name,
+          };
+          // persist local uploads separately
+          const prevLocal = JSON.parse(localStorage.getItem('local_closet_items') || '[]');
+          const updatedLocal = [newItem, ...prevLocal];
+          localStorage.setItem('local_closet_items', JSON.stringify(updatedLocal));
+          // update UI immediately
+          setClosetItems(prev => [newItem, ...(Array.isArray(prev) ? prev : [])]);
+          showToast('Image saved locally.', 'success');
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Error saving image locally:', err);
+        showToast('Error saving image locally.', 'error');
+      }
       return;
     }
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const imageUrl = e.target.result;
-        await addDoc(collection(db, `artifacts/${appId}/users/${userId}/closet`), {
-          category,
-          imageUrl,
-          timestamp: serverTimestamp(),
-        });
-        showToast("Image uploaded successfully!", "success");
-      } catch (e) {
-        showToast("Error uploading image.", "error");
-        console.error("Error adding document: ", e);
-      }
-    };
-    reader.readAsDataURL(file);
+    // If Firebase is configured, upload to Storage and save URL in Firestore
+    const storage = getStorage();
+    try {
+      const storagePath = `closet/${userId}/${Date.now()}_${file.name}`;
+      const fileRef = storageRef(storage, storagePath);
+      const uploadTask = uploadBytesResumable(fileRef, file);
+
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.debug('Upload progress:', progress);
+        },
+        (error) => {
+          showToast('Error uploading image to Storage.', 'error');
+          console.error('Error uploading file to Storage: ', error);
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            console.debug('Upload complete, downloadURL:', downloadURL);
+            const docRef = await addDoc(collection(db, `artifacts/${appId}/users/${userId}/closet`), {
+              category,
+              imageUrl: downloadURL,
+              timestamp: serverTimestamp(),
+            });
+            console.debug('Firestore doc added:', docRef.id);
+            showToast('Image uploaded successfully!', 'success');
+          } catch (e) {
+            showToast('Error saving image URL to database.', 'error');
+            console.error('Error writing Firestore document: ', e);
+          }
+        }
+      );
+    } catch (err) {
+      showToast('Error uploading image.', 'error');
+      console.error('handleUploadImage unexpected error:', err);
+    }
   };
 
   const handleSaveOutfit = async () => {
@@ -434,7 +504,8 @@ const App = () => {
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files[0];
-                    if (file) handleUploadImage(currentCategory, file);
+                    const uploadCategory = (selectedFilter && selectedFilter !== 'All') ? selectedFilter : 'Tops';
+                    if (file) handleUploadImage(uploadCategory, file);
                   }}
                 />
               </label>
