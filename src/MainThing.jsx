@@ -4,10 +4,12 @@ import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, del
 import { useState, useEffect, createContext } from 'react';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { auth } from "./firebase";
 import LiquidEther from './LiquidEther';
 import PrismaticBurst from './PrismaticBurst';
 import Orb from './Orb';
 import Aurora from './Aurora';
+import AuthPage from './AuthPage';
 
 
 // Global variables for Firebase configuration.
@@ -816,7 +818,7 @@ const LoginSignupScreen = () => (
         <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
         {isAuthReady ? (
           screen === 'login' ? (
-            <LoginSignupScreen />
+            <AuthPage onAuthSuccess={() => setScreen('dashboard')} />
           ) : (
             <MainLayout>
               {(() => {
