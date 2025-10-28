@@ -53,4 +53,11 @@ export async function getDocument(collectionName, id) {
   return { id: snapshot.id, ...snapshot.data() };
 }
 
+// Set (create or overwrite) a document with a specific id in a collection
+export async function setDocument(collectionName, id, data) {
+  const dRef = doc(db, collectionName, id);
+  await setDoc(dRef, data);
+  return id;
+}
+
 export default app;

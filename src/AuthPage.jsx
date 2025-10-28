@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { auth } from "./firebase";
+import { auth, setDocument } from "./firebase";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -55,6 +55,17 @@ const LoginSignupScreen = ({ onAuthSuccess }) => {
       }
       setUser(userCredential.user);
       setUserId(userCredential.user.uid);
+      // Save user record in Firestore under collection `users` with doc id = uid
+      try {
+        await setDocument('users', userCredential.user.uid, {
+          fullName: fullName.trim(),
+          displayName: fullName.trim(),
+          email: signupEmail,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error('Failed to save user to Firestore:', err);
+      }
       alert("Account created successfully!");
       if (onAuthSuccess) onAuthSuccess();
     } catch (error) {
