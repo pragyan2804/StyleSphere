@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useState, useEffect, createContext } from 'react';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -135,6 +135,8 @@ const App = () => {
 
   // Upload modal visibility
   const [isUploadModalVisible, setIsUploadModalVisible] = useState(false);
+  // Closet upload modal visibility
+  const [isClosetUploadModalVisible, setIsClosetUploadModalVisible] = useState(false);
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [selectedOutfitItems, setSelectedOutfitItems] = useState({
     Tops: null,
@@ -290,6 +292,52 @@ const App = () => {
     } catch (e) {
       showToast("Error saving outfit.", "error");
       console.error("Error adding document: ", e);
+    }
+  };
+
+  const handleDeleteClosetItem = async (item) => {
+    if (!window.confirm('Are you sure you want to delete this item from your closet?')) return;
+
+    // If Firebase isn't configured, remove from localStorage fallback
+    if (!db || !userId) {
+      try {
+        const prevLocal = JSON.parse(localStorage.getItem('local_closet_items') || '[]');
+        const updatedLocal = prevLocal.filter(i => i.id !== item.id);
+        localStorage.setItem('local_closet_items', JSON.stringify(updatedLocal));
+        // Also remove from current UI state
+        setClosetItems(prev => Array.isArray(prev) ? prev.filter(i => i.id !== item.id) : prev);
+        showToast('Item removed from local closet.', 'success');
+      } catch (e) {
+        console.error('Error removing local closet item:', e);
+        showToast('Error removing item.', 'error');
+      }
+      return;
+    }
+
+    try {
+      // Attempt to delete Firestore document
+      await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/closet`, item.id));
+
+      // Try to delete file from Storage if imageUrl points to our storage
+      try {
+        const storage = getStorage();
+        // If imageUrl looks like a firebase storage url, we try to derive a ref.
+        // Best-effort: if imageUrl contains '/o/' encoded path, skip complex parsing and do nothing.
+        // If you store the storage path in the doc in future, deleteObject can be used with that ref.
+        if (item.imageUrl && item.imageUrl.startsWith('gs://')) {
+          // gs:// style reference
+          const storageRefObj = storageRef(storage, item.imageUrl.replace('gs://', ''));
+          await deleteObject(storageRefObj).catch(() => {});
+        }
+      } catch (e) {
+        // ignore storage deletion errors
+        console.debug('Storage delete attempt failed or not applicable:', e);
+      }
+
+      showToast('Item deleted.', 'success');
+    } catch (e) {
+      console.error('Error deleting closet item:', e);
+      showToast('Error deleting item.', 'error');
     }
   };
 
@@ -509,9 +557,9 @@ const LoginSignupScreen = () => (
           </div>
           <div className="flex-grow overflow-y-auto">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-2">
-              {filteredItems.length > 0 ? (
-                filteredItems.map(item => (
-                  <motion.div
+                {filteredItems.length > 0 ? (
+                filteredItems.map(item => (
+                  <motion.div
                     key={item.id}
                     layout
                     initial={{ opacity: 0, scale: 0.9 }}
@@ -526,14 +574,21 @@ const LoginSignupScreen = () => (
                       alt={item.category}
                       className="w-full h-48 object-cover object-center"
                     />
-                    {/* ❌ REMOVED THE OVERLAY DIV HERE ❌ */}
+                    {/* delete button - shown on hover */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteClosetItem(item); }}
+                      className="absolute top-2 right-2 bg-black/40 p-2 rounded-full text-stone-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </motion.div>
-                ))
-              ) : (
-                <div className="col-span-full text-center p-8 text-stone-500 text-lg">
-                  No items in this category. Upload something!
-                </div>
-              )}
+                ))
+                ) : (
+                <div className="col-span-full text-center p-8 text-stone-500 text-lg">
+                  No items in this category. Upload something!
+                </div>
+                )}
             </div>
           </div>
         </div>
@@ -567,21 +622,13 @@ const LoginSignupScreen = () => (
                 <Trash2 size={20} />
                 <span>Remove Outfit</span>
               </button>
-              <label htmlFor="image-upload" className="w-full flex items-center justify-center space-x-2 text-white font-semibold py-3 rounded-lg shadow-lg cursor-pointer glassy-button-upload">
+              <button
+                onClick={() => setIsClosetUploadModalVisible(true)}
+                className="w-full flex items-center justify-center space-x-2 text-white font-semibold py-3 rounded-lg shadow-lg glassy-button-upload"
+              >
                 <Camera size={20} />
                 <span>Upload Image</span>
-                <input
-                  id="image-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    const uploadCategory = (selectedFilter && selectedFilter !== 'All') ? selectedFilter : 'Tops';
-                    if (file) handleUploadImage(uploadCategory, file);
-                  }}
-                />
-              </label>
+              </button>
             </div>
           </div>
         </div>
@@ -646,6 +693,100 @@ const mockShowToast = (message, type = 'info') => {
 };
 
 // --- UPLOAD MODAL COMPONENT ---
+
+// Simple modal for uploading directly into the user's closet (file + category)
+const UploadClosetModal = ({ isVisible, onClose, onUpload, categories }) => {
+  const [file, setFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
+  const [category, setCategory] = useState(categories && categories[0] ? categories[0] : 'Tops');
+
+  useEffect(() => {
+    if (!isVisible) {
+      // cleanup when modal closes
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+      setFile(null);
+      setImagePreviewUrl(null);
+      setCategory(categories && categories[0] ? categories[0] : 'Tops');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible]);
+
+  const handleFileChangeCloset = (e) => {
+    const f = e.target.files[0];
+    if (f && f.type.startsWith('image/')) {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      const url = URL.createObjectURL(f);
+      setFile(f);
+      setImagePreviewUrl(url);
+    } else {
+      setFile(null);
+      setImagePreviewUrl(null);
+      mockShowToast('Please select a valid image file.', 'error');
+    }
+  };
+
+  const handleSubmitCloset = (e) => {
+    e.preventDefault();
+    if (!file) {
+      mockShowToast('Select an image to upload.', 'error');
+      return;
+    }
+    // Call parent handler with (category, file)
+    onUpload(category, file);
+    onClose();
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+      <div className="bg-stone-800 p-6 rounded-xl w-full max-w-md shadow-2xl border border-purple-700/50">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+            <Camera size={20} />
+            <span>Upload to My Closet</span>
+          </h2>
+          <button onClick={onClose} className="p-2 text-stone-400 hover:text-white rounded-full transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmitCloset} className="space-y-4">
+          <div className="flex flex-col">
+            <label className="text-stone-300 mb-1 font-medium">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="p-3 rounded-lg bg-stone-700 text-white border border-stone-600 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-colors appearance-none"
+            >
+              {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col items-center border border-dashed border-stone-600 p-4 rounded-lg">
+            <label htmlFor="closet-file-upload" className="text-yellow-400 cursor-pointer flex items-center space-x-2 hover:text-yellow-300 transition-colors">
+              <Camera size={18} />
+              <span className="font-semibold">Choose Image</span>
+            </label>
+            <input id="closet-file-upload" type="file" accept="image/*" onChange={handleFileChangeCloset} className="hidden" />
+            {imagePreviewUrl ? (
+              <img src={imagePreviewUrl} alt="Preview" className="mt-3 w-32 h-32 object-cover rounded-md shadow-md" />
+            ) : (
+              <p className="text-sm text-stone-500 mt-2">No image selected</p>
+            )}
+          </div>
+
+          <div className="flex space-x-2">
+            <button type="submit" className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg">Upload</button>
+            <button type="button" onClick={onClose} className="flex-1 bg-stone-700 hover:bg-stone-600 text-white font-semibold py-3 rounded-lg">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
   const [form, setForm] = useState({
@@ -1155,6 +1296,16 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
           isVisible={isUploadModalVisible}
           onClose={() => setIsUploadModalVisible(false)}
           onUpload={handleMarketplaceUpload}
+          categories={["Tops", "Bottoms", "Footwear"]}
+        />
+        {/* Closet upload modal rendered at app root */}
+        <UploadClosetModal
+          isVisible={isClosetUploadModalVisible}
+          onClose={() => setIsClosetUploadModalVisible(false)}
+          onUpload={(category, file) => {
+            // Use existing handler that supports local fallback and Firebase
+            handleUploadImage(category, file);
+          }}
           categories={["Tops", "Bottoms", "Footwear"]}
         />
         <AnimatePresence>
