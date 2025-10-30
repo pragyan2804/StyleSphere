@@ -172,8 +172,9 @@ const App = () => {
 
   useEffect(() => {
     if (db && userId) {
-      const closetRef = collection(db, `artifacts/${appId}/users/${userId}/closet`);
-      const savedOutfitsRef = collection(db, `artifacts/${appId}/users/${userId}/savedOutfits`);
+      const closetRef = collection(db, `users/${userId}/closet`);
+      const savedOutfitsRef = collection(db, `users/${userId}/savedOutfits`);
+
 
       const unsubscribeCloset = onSnapshot(closetRef, (snapshot) => {
         const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -281,7 +282,7 @@ const App = () => {
       console.debug('Cloudinary upload success:', imageUrl, publicId);
 
       try {
-        const docRef = await addDoc(collection(db, `artifacts/${appId}/users/${userId}/closet`), {
+        const docRef = await addDoc(collection(db, `users/${userId}/closet`), {
           category,
           imageUrl,
           cloudinary_public_id: publicId || null,
@@ -343,7 +344,7 @@ const App = () => {
 
     try {
       // Attempt to delete Firestore document
-      await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/closet`, item.id));
+      await deleteDoc(doc(db, `users/${userId}/closet`, item.id));
 
       // Try to delete file from Storage if imageUrl points to our storage
       // Note: uploaded images are stored on Cloudinary (unsigned).
@@ -354,7 +355,7 @@ const App = () => {
       // Cloudinary Admin API using your API key/secret and accepts the
       // `cloudinary_public_id` stored in the document.
 
-      showToast('Item deleted.', 'success');
+      showToast("Item deleted.", "success");
     } catch (e) {
       console.error('Error deleting closet item:', e);
       showToast('Error deleting item.', 'error');
@@ -377,7 +378,7 @@ const App = () => {
       return;
     }
     try {
-      await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/savedOutfits`, outfitId));
+      await deleteDoc(doc(db, `users/${userId}/savedOutfits`, outfitId));
       showToast("Outfit deleted successfully!", "success");
     } catch (e) {
       showToast("Error deleting outfit.", "error");
