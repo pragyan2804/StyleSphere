@@ -848,21 +848,24 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
       return;
     }
 
-    // In a real app, 'imageUrl' would be the URL returned from Firebase Storage.
+    // In a real app, we pass the File as well so the handler can upload it.
     const newProduct = {
-      id: generateId(), 
+      id: generateId(),
       name,
       price: parseInt(price),
       category,
       availability,
       gender,
-      // Using the temporary local URL for immediate visual feedback in this demo
-      imageUrl: imagePreviewUrl, 
+      // Use local preview URL for immediate UI feedback
+      imageUrl: imagePreviewUrl,
+      // Pass the original File so the uploader can POST it to Cloudinary
+      file: form.file,
     };
 
     onUpload(newProduct);
 
-    // Reset form and close modal
+    // Reset form and close modal. Do NOT revoke the object URL here because
+    // the marketplace preview may still use it until Cloudinary URL replaces it.
     setForm({
       name: '',
       price: '',
@@ -872,10 +875,6 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
       file: null,
       imagePreviewUrl: null,
     });
-    // Clean up the URL after the item is uploaded and the form is closed/reset
-    if (imagePreviewUrl) {
-        URL.revokeObjectURL(imagePreviewUrl);
-    }
     onClose();
   };
 
@@ -1172,11 +1171,113 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
   };
   
       // Upload modal instance (global within App)
-      const handleMarketplaceUpload = (newProduct) => {
+      const handleMarketplaceUpload = async (newProduct) => {
         // ensure id uniqueness
         if (!newProduct.id) newProduct.id = generateId();
-        setMarketplaceProducts(prev => [newProduct, ...prev]);
-        showToast('Item listed on marketplace!', 'success');
+
+        // Immediately show a local preview in the marketplace so the user sees their item right away.
+        const preview = { ...newProduct, ownerId: userId || null };
+        setMarketplaceProducts(prev => [preview, ...prev]);
+
+        // If Firebase isn't configured or user not ready, keep preview and bail out
+        if (!db || !userId) {
+          showToast('Item saved locally (no server connection).', 'error');
+          return;
+        }
+
+        let imageUrl = newProduct.imageUrl || null;
+        let cloudinaryPublicId = null;
+        try {
+
+          // convert dataURL -> Blob helper
+          const dataURLtoBlob = (dataurl) => {
+            const arr = dataurl.split(',');
+            const mime = arr[0].match(/:(.*?);/)[1];
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+              u8arr[n] = bstr.charCodeAt(n);
+            }
+            return new Blob([u8arr], { type: mime });
+          };
+
+          const hasFile = !!newProduct.file;
+          const hasDataUrl = !!imageUrl && imageUrl.startsWith && imageUrl.startsWith('data:');
+
+          if (hasFile || hasDataUrl) {
+            const formData = new FormData();
+            if (hasFile) formData.append('file', newProduct.file);
+            else formData.append('file', dataURLtoBlob(imageUrl), `${newProduct.name || 'upload'}.jpg`);
+
+            formData.append('upload_preset', 'wardrobe_unsigned');
+            // store marketplace uploads under a dedicated folder; Cloudinary will auto-create this folder on first upload
+            formData.append('folder', `stylesphere/marketplace/${userId}`);
+
+            const resp = await fetch('https://api.cloudinary.com/v1_1/dgngmm6nt/upload', {
+              method: 'POST',
+              body: formData,
+            });
+
+            const data = await resp.json();
+            if (!resp.ok || !data?.secure_url) {
+              console.error('Cloudinary marketplace upload failed:', data);
+              throw new Error('Cloudinary upload failed');
+            }
+
+            // Use only Cloudinary secure URL (do NOT persist local/object URLs)
+            imageUrl = data.secure_url;
+            cloudinaryPublicId = data.public_id;
+            console.debug('Cloudinary marketplace upload success:', imageUrl, cloudinaryPublicId);
+          } else {
+            // No file/dataURL provided — abort to avoid storing local preview URLs
+            throw new Error('No image provided for marketplace upload');
+          }
+
+          // Persist product metadata + image URL to Firestore under artifacts/{appId}/users/{userId}/marketplace
+          const docRef = await addDoc(collection(db, `marketplace/${appId}/${userId}`), {
+            ownerId: userId,
+            name: newProduct.name,
+            price: Number(newProduct.price) || null,
+            category: newProduct.category,
+            availability: newProduct.availability,
+            gender: newProduct.gender,
+            imageUrl,
+            cloudinary_public_id: cloudinaryPublicId || null,
+            timestamp: serverTimestamp(),
+          });
+
+          const saved = { ...preview, id: docRef.id, imageUrl, cloudinary_public_id: cloudinaryPublicId || null, ownerId: userId };
+          // Replace preview entry with saved document
+          setMarketplaceProducts(prev => prev.map(p => p.id === preview.id ? saved : p));
+
+          // If the preview used a blob: URL for local preview, revoke it now that the Cloudinary URL is in place
+          try {
+            if (preview?.imageUrl && typeof preview.imageUrl === 'string' && preview.imageUrl.startsWith && preview.imageUrl.startsWith('blob:')) {
+              URL.revokeObjectURL(preview.imageUrl);
+            }
+          } catch (revErr) {
+            console.debug('Error revoking preview object URL:', revErr);
+          }
+          showToast('Item listed on marketplace!', 'success');
+          console.debug('handleMarketplaceUpload: saved to Firestore, docRef.id=', docRef.id);
+        } catch (err) {
+          console.error('Error saving marketplace item to Firestore:', err);
+          // If Cloudinary upload succeeded but Firestore write failed, replace the preview
+          // with the Cloudinary URL so the UI still shows the hosted image.
+          try {
+            if (imageUrl && imageUrl.startsWith && imageUrl.startsWith('http')) {
+              setMarketplaceProducts(prev => prev.map(p => p.id === preview.id ? { ...p, imageUrl, cloudinary_public_id: cloudinaryPublicId || null } : p));
+              // Revoke blob preview if present
+              if (preview?.imageUrl && typeof preview.imageUrl === 'string' && preview.imageUrl.startsWith && preview.imageUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(preview.imageUrl);
+              }
+            }
+          } catch (inner) {
+            console.debug('Error updating preview after Cloudinary success but Firestore failure:', inner);
+          }
+          showToast('Failed to save to server — item saved locally.', 'error');
+        }
       };
   
   return (
