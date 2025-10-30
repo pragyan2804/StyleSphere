@@ -1,39 +1,42 @@
 // src/firebase.jsx
 
-// Import the functions you need from the SDKs you need (modular v9+)
+// ✅ Import required Firebase SDK modules (modular v9+)
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+import { getAnalytics, isSupported as isAnalyticsSupported } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
-import { getFirestore, collection, getDocs, addDoc, doc, getDoc, setDoc, query, where } from "firebase/firestore";
+import { 
+  getFirestore, collection, getDocs, addDoc, doc, getDoc, setDoc 
+} from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
-// Your web app's Firebase configuration
-// Note: For production it's better to use environment variables instead of committing keys.
+// ✅ Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBSoI8_5GJDeo0QSmVBy7ppFvy_vmxl36c",
   authDomain: "stylesphere-17b5f.firebaseapp.com",
   projectId: "stylesphere-17b5f",
-  storageBucket: "stylesphere-17b5f.firebasestorage.app",
+  storageBucket: "stylesphere-17b5f.appspot.com",
   messagingSenderId: "293277871690",
   appId: "1:293277871690:web:6c4d0355c4a35b627580b3",
   measurementId: "G-DE0F9S7LHM"
 };
 
-// Initialize Firebase
+// ✅ Initialize Firebase App
 const app = initializeApp(firebaseConfig);
+
+// ✅ Initialize Analytics (only if supported, avoids errors on Node / SSR)
 let analytics;
 try {
-  // Analytics may fail in some environments (e.g., SSR), so guard it
   analytics = getAnalytics(app);
 } catch (e) {
-  // ignore analytics errors in non-browser or restricted environments
   analytics = null;
 }
 
-// Exports for auth and firestore
+// ✅ Initialize core Firebase services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 
-// Small convenience helpers (optional) to keep import sites simple
+// ✅ Firestore utility helpers (optional but nice)
 export async function getCollection(collectionName) {
   const colRef = collection(db, collectionName);
   const snapshot = await getDocs(colRef);
@@ -49,15 +52,14 @@ export async function addDocument(collectionName, data) {
 export async function getDocument(collectionName, id) {
   const dRef = doc(db, collectionName, id);
   const snapshot = await getDoc(dRef);
-  if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...snapshot.data() };
+  return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
 }
 
-// Set (create or overwrite) a document with a specific id in a collection
 export async function setDocument(collectionName, id, data) {
   const dRef = doc(db, collectionName, id);
-  await setDoc(dRef, data);
+  await setDoc(dRef, data, { merge: true }); // merge:true avoids overwriting
   return id;
 }
 
+// ✅ Export app instance as default
 export default app;

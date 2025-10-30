@@ -1,16 +1,18 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useState, useEffect, createContext } from 'react';
+import { signInWithCustomToken, signInAnonymously } from 'firebase/auth';
+import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { auth } from "./firebase";
+
+// ✅ Use your properly exported Firebase services
+import { auth as fbAuth, db as fbDb } from './firebase';
+
 import LiquidEther from './LiquidEther';
 import PrismaticBurst from './PrismaticBurst';
 import Orb from './Orb';
 import Aurora from './Aurora';
 import AuthPage from './AuthPage';
+
 
 
 // Global variables for Firebase configuration.
@@ -25,35 +27,55 @@ const initialAuthToken = null;
 const AppContext = createContext();
 
 // Firebase initialization and authentication
+// Use the already-initialized exports from src/firebase.jsx (fbAuth, fbDb)
 const useFirebase = () => {
   const [auth, setAuth] = useState(null);
   const [db, setDb] = useState(null);
   const [userId, setUserId] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);  
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
     try {
-      if (Object.keys(firebaseConfig).length > 0) {
-        const app = initializeApp(firebaseConfig);
-        const authInstance = getAuth(app);
-        const dbInstance = getFirestore(app);
-        setAuth(authInstance);
-        setDb(dbInstance);
-        console.debug('Firebase initialized with config:', firebaseConfig);
+      if (fbAuth && fbDb) {
+        setAuth(fbAuth);
+        setDb(fbDb);
+        console.debug('Firebase initialized via src/firebase exports');
 
         const authenticate = async () => {
           try {
+            // Try to ensure we have an authenticated user (anonymous fallback)
             if (initialAuthToken) {
-              await signInWithCustomToken(authInstance, initialAuthToken);
+              try {
+                await signInWithCustomToken(fbAuth, initialAuthToken);
+              } catch (e) {
+                console.error('Custom token sign-in failed:', e);
+              }
             } else {
-              await signInAnonymously(authInstance);
+              // If there's no current user, try anonymous sign-in but handle projects
+              // where anonymous auth is disabled (admin-restricted-operation).
+              if (!fbAuth.currentUser) {
+                try {
+                  await signInAnonymously(fbAuth);
+                } catch (e) {
+                  // Known case when anonymous sign-in is disabled in Firebase console
+                  if (e && e.code === 'auth/admin-restricted-operation') {
+                    console.warn('Anonymous sign-in is disabled for this Firebase project. Continuing without auth.');
+                  } else {
+                    console.error('Anonymous sign-in failed:', e);
+                  }
+                }
+              }
             }
-            if (authInstance.currentUser) {
-              setUserId(authInstance.currentUser.uid);
-              console.debug('Firebase auth user id:', authInstance.currentUser.uid);
+
+            if (fbAuth.currentUser) {
+              setUserId(fbAuth.currentUser.uid);
+              console.debug('Firebase auth user id:', fbAuth.currentUser.uid);
+            } else {
+              // No authenticated user available; continue but mark auth as ready.
+              console.debug('No Firebase user available after authentication attempts.');
             }
           } catch (error) {
-            console.error("Firebase Auth Error:", error);
+            console.error('Firebase Auth Error (unexpected):', error);
           } finally {
             setIsAuthReady(true);
           }
@@ -233,39 +255,44 @@ const App = () => {
       }
       return;
     }
-    // If Firebase is configured, upload to Storage and save URL in Firestore
-    const storage = getStorage();
+    // If Firebase is configured, upload to Cloudinary and save the returned URL in Firestore
     try {
-      const storagePath = `closet/${userId}/${Date.now()}_${file.name}`;
-      const fileRef = storageRef(storage, storagePath);
-      const uploadTask = uploadBytesResumable(fileRef, file);
+      // Cloudinary unsigned upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'wardrobe_unsigned');
+      // Optional: store under a per-user folder in Cloudinary
+      formData.append('folder', `stylesphere/closet/${userId}`);
 
-      uploadTask.on('state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.debug('Upload progress:', progress);
-        },
-        (error) => {
-          showToast('Error uploading image to Storage.', 'error');
-          console.error('Error uploading file to Storage: ', error);
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            console.debug('Upload complete, downloadURL:', downloadURL);
-            const docRef = await addDoc(collection(db, `artifacts/${appId}/users/${userId}/closet`), {
-              category,
-              imageUrl: downloadURL,
-              timestamp: serverTimestamp(),
-            });
-            console.debug('Firestore doc added:', docRef.id);
-            showToast('Image uploaded successfully!', 'success');
-          } catch (e) {
-            showToast('Error saving image URL to database.', 'error');
-            console.error('Error writing Firestore document: ', e);
-          }
-        }
-      );
+      const resp = await fetch('https://api.cloudinary.com/v1_1/dgngmm6nt/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        console.error('Cloudinary upload failed:', data);
+        showToast('Error uploading image to Cloudinary.', 'error');
+        return;
+      }
+
+      const imageUrl = data.secure_url || data.url;
+      const publicId = data.public_id;
+      console.debug('Cloudinary upload success:', imageUrl, publicId);
+
+      try {
+        const docRef = await addDoc(collection(db, `artifacts/${appId}/users/${userId}/closet`), {
+          category,
+          imageUrl,
+          cloudinary_public_id: publicId || null,
+          timestamp: serverTimestamp(),
+        });
+        console.debug('Firestore doc added:', docRef.id);
+        showToast('Image uploaded successfully!', 'success');
+      } catch (e) {
+        showToast('Error saving image URL to database.', 'error');
+        console.error('Error writing Firestore document: ', e);
+      }
     } catch (err) {
       showToast('Error uploading image.', 'error');
       console.error('handleUploadImage unexpected error:', err);
@@ -319,20 +346,13 @@ const App = () => {
       await deleteDoc(doc(db, `artifacts/${appId}/users/${userId}/closet`, item.id));
 
       // Try to delete file from Storage if imageUrl points to our storage
-      try {
-        const storage = getStorage();
-        // If imageUrl looks like a firebase storage url, we try to derive a ref.
-        // Best-effort: if imageUrl contains '/o/' encoded path, skip complex parsing and do nothing.
-        // If you store the storage path in the doc in future, deleteObject can be used with that ref.
-        if (item.imageUrl && item.imageUrl.startsWith('gs://')) {
-          // gs:// style reference
-          const storageRefObj = storageRef(storage, item.imageUrl.replace('gs://', ''));
-          await deleteObject(storageRefObj).catch(() => {});
-        }
-      } catch (e) {
-        // ignore storage deletion errors
-        console.debug('Storage delete attempt failed or not applicable:', e);
-      }
+      // Note: uploaded images are stored on Cloudinary (unsigned).
+      // We do NOT delete Cloudinary assets from the client because unsigned uploads
+      // can't be deleted securely from the browser (requires API secret).
+      // So here we only remove the Firestore document. If you want to remove
+      // Cloudinary assets, build a secure server-side endpoint that calls the
+      // Cloudinary Admin API using your API key/secret and accepts the
+      // `cloudinary_public_id` stored in the document.
 
       showToast('Item deleted.', 'success');
     } catch (e) {
