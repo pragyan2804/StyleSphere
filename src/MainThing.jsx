@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext } from 'react';
 import { signInWithCustomToken, signInAnonymously } from 'firebase/auth';
-import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, orderBy, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -17,6 +17,9 @@ import AuthPage from './AuthPage';
 
 // Global variables for Firebase configuration.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+// Single source of truth for marketplace collection path used across the app
+const MARKETPLACE_COLLECTION = `marketplace/${appId}/marketplace`;
 
 // No Firebase config here — user will configure Firebase in a separate file/environment.
 // Keep firebaseConfig empty so the app uses local fallback storage until configured.
@@ -134,29 +137,14 @@ const App = () => {
   const [screen, setScreen] = useState('login');
   const [closetItems, setClosetItems] = useState(dummyItems);
   // Marketplace products (moved here so UploadModal can add items)
-  const [marketplaceProducts, setMarketplaceProducts] = useState([
-    { id: 1, name: "Casual T-Shirt", price: 500, availability: "buy", imageUrl: "/mock_imgs/tshirt.png", category: "Tops", gender: "Unisex"},
-    { id: 2, name: "Levi's Blue Jeans", price: 400, availability: "rent", imageUrl: "/mock_imgs/jeans.png", category: "Bottoms", gender: "Mens"},
-    { id: 3, name: "Chikan Kurti", price: 700, availability: "buy", imageUrl: "/mock_imgs/chikan_kurti.png", category: "Tops", gender: "Womens" },
-    { id: 4, name: "Leather Jacket", price: 300, availability: "rent", imageUrl: "/mock_imgs/leather_jacket.png", category: "Tops", gender: "Mens" },
-    { id: 5, name: "Running Shoes", price: 1000, availability: "buy", imageUrl: "/mock_imgs/running_shoes.png", category: "Footwear", gender: "Unisex" },
-    { id: 6, name: "Louboutin Heels", price: 3000, availability: "rent", imageUrl: "/mock_imgs/heels.png", category: "Footwear", gender: "Womens" },
-    { id: 7, name: "Hoodie", price: 500, availability: "buy", imageUrl: "/mock_imgs/sweatshirt.png", category: "Tops", gender: "Unisex" },
-    { id: 8, name: "Palazzo", price: 550, availability: "rent", imageUrl: "/mock_imgs/palazzo.png", category: "Bottoms", gender: "Womens"},
-    { id: 9, name: "Prom Dress", price: 400, availability: "rent", imageUrl: "/mock_imgs/prom_dress.png", category: "Tops", gender: "Womens" },
-    { id: 10, name: "Saree", price: 1175, availability: "buy", imageUrl: "/mock_imgs/saree.png", category: "Tops", gender: "Womens" },
-    { id: 11, name: "Cargos", price: 450, availability: "buy", imageUrl: "/mock_imgs/cargos.png", category: "Bottoms", gender: "Unisex" },
-    { id: 12, name: "Denim Shorts", price: 300, availability: "buy", imageUrl: "/mock_imgs/denim_shorts.png", category: "Bottoms", gender: "Womens"},
-    { id: 14, name: "Bayern Munich Jersey - 125th Anniversary", price: 2700, availability: "buy", imageUrl: "/mock_imgs/bayern_jersey.png", category: "Tops", gender: "Unisex" },
-    { id: 15, name: "Nike Travis Scott Mocha Lows", price: 2900, availability: "buy", imageUrl: "/mock_imgs/nike_sneakers.png", category: "Footwear", gender: "Unisex" },
-    { id: 16, name: "Trench Coat", price: 1150, availability: "buy", imageUrl: "/mock_imgs/winter_coat.png", category: "Tops", gender: "Womens" },
-    { id: 17, name: "Converse Chuck All Star", price: 2450, availability: "buy", imageUrl: "/mock_imgs/converse.png", category: "Footwear", gender: "Unisex" },
-    { id: 18, name: "Formal Trousers", price: 655, availability: "buy", imageUrl: "/mock_imgs/trouser.png", category: "Bottoms", gender: "Mens" },
-    { id: 19, name: "Slip-on Sneakers", price: 570, availability: "rent", imageUrl: "/mock_imgs/sneakers.png", category: "Footwear", gender: "Unisex" },
-  ]);
+  // Start with an empty marketplace; items are added by user uploads and Firestore sync.
+  const [marketplaceProducts, setMarketplaceProducts] = useState([]);
 
   // Upload modal visibility
   const [isUploadModalVisible, setIsUploadModalVisible] = useState(false);
+  // Edit modal visibility and currently editing item
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
   // Closet upload modal visibility
   const [isClosetUploadModalVisible, setIsClosetUploadModalVisible] = useState(false);
   const [savedOutfits, setSavedOutfits] = useState([]);
@@ -197,6 +185,26 @@ const App = () => {
       };
     }
   }, [db, userId]);
+
+  // Subscribe to the global marketplace collection so all users see items after refresh
+  useEffect(() => {
+    if (!db) return;
+    try {
+  const marketplaceRef = collection(db, MARKETPLACE_COLLECTION);
+  const q = query(marketplaceRef, orderBy('timestamp', 'desc'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        console.debug('Marketplace snapshot received:', items.length);
+        setMarketplaceProducts(items);
+      }, (err) => {
+        console.error('Error listening to marketplace collection:', err);
+      });
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.error('Marketplace subscription error:', e);
+    }
+  }, [db]);
 
   // Load locally persisted closet items when Firebase is not configured
   useEffect(() => {
@@ -809,6 +817,115 @@ const UploadClosetModal = ({ isVisible, onClose, onUpload, categories }) => {
   );
 };
 
+// Edit modal for updating existing marketplace items
+const EditItemModal = ({ isVisible, onClose, item, onSave }) => {
+  const [form, setForm] = useState({
+    name: item?.name || '',
+    price: item?.price || '',
+    category: item?.category || 'Tops',
+    availability: item?.availability || 'buy',
+    gender: item?.gender || 'Unisex',
+    file: null,
+    imagePreviewUrl: item?.imageUrl || null,
+  });
+
+  useEffect(() => {
+    setForm({
+      name: item?.name || '',
+      price: item?.price || '',
+      category: item?.category || 'Tops',
+      availability: item?.availability || 'buy',
+      gender: item?.gender || 'Unisex',
+      file: null,
+      imagePreviewUrl: item?.imageUrl || null,
+    });
+  }, [item]);
+
+  if (!isVisible) return null;
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      if (form.imagePreviewUrl && form.imagePreviewUrl.startsWith && form.imagePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(form.imagePreviewUrl);
+      }
+      const url = URL.createObjectURL(file);
+      setForm(prev => ({ ...prev, file, imagePreviewUrl: url }));
+    } else {
+      mockShowToast('Please select a valid image file.', 'error');
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const updated = {
+      ...item,
+      name: form.name,
+      price: Number(form.price) || null,
+      category: form.category,
+      availability: form.availability,
+      gender: form.gender,
+      file: form.file,
+      imagePreviewUrl: form.imagePreviewUrl,
+    };
+    onSave(updated);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+      <div className="bg-stone-800 p-6 rounded-xl w-full max-w-lg shadow-2xl border border-purple-700/50">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Edit Item</h2>
+          <button onClick={onClose} className="p-2 text-stone-400 hover:text-white rounded-full transition-colors"><X size={24} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex flex-col">
+            <label className="text-stone-300 mb-1 font-medium">Product Name</label>
+            <input name="name" value={form.name} onChange={handleChange} className="p-3 rounded-lg bg-stone-700 text-white" required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <input name="price" type="number" value={form.price} onChange={handleChange} className="p-3 rounded-lg bg-stone-700 text-white" required />
+            <select name="availability" value={form.availability} onChange={handleChange} className="p-3 rounded-lg bg-stone-700 text-white">
+              <option value="buy">Buy</option>
+              <option value="rent">Rent</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <select name="category" value={form.category} onChange={handleChange} className="p-3 rounded-lg bg-stone-700 text-white">
+              <option>Tops</option>
+              <option>Bottoms</option>
+              <option>Footwear</option>
+            </select>
+            <select name="gender" value={form.gender} onChange={handleChange} className="p-3 rounded-lg bg-stone-700 text-white">
+              <option>Unisex</option>
+              <option>Mens</option>
+              <option>Womens</option>
+            </select>
+          </div>
+          <div className="flex flex-col items-center border border-dashed border-stone-600 p-4 rounded-lg">
+              <label htmlFor="edit-file-upload" className="text-yellow-400 cursor-pointer flex items-center space-x-2">
+                <Camera size={18} />
+                <span className="font-semibold">Change Image</span>
+              </label>
+              <input id="edit-file-upload" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+            {form.imagePreviewUrl ? <img src={form.imagePreviewUrl} alt="Preview" className="mt-3 w-32 h-32 object-cover rounded-md" /> : <p className="text-sm text-stone-500">No image</p>}
+          </div>
+          <div className="flex space-x-2">
+            <button type="submit" className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg">Save</button>
+            <button type="button" onClick={onClose} className="flex-1 bg-stone-700 hover:bg-stone-600 text-white font-semibold py-3 rounded-lg">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
   const [form, setForm] = useState({
     name: '',
@@ -1021,6 +1138,24 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
   
     const categories = ["Tops", "Bottoms", "Footwear"];
     const genders = ["Mens", "Womens", "Unisex"];
+
+    // If there are no uploaded marketplace products yet, show a simple empty state
+    if (!Array.isArray(marketplaceProducts) || marketplaceProducts.length === 0) {
+      return (
+        <div className="flex-grow flex items-center justify-center p-6">
+          <div className="text-center space-y-4">
+            <p className="text-stone-400 text-lg">No products found</p>
+            <button
+              onClick={() => setIsUploadModalVisible(true)}
+              className="inline-flex items-center px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold transition-colors"
+            >
+              <PlusCircle size={18} />
+              <span className="ml-2">Upload item</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
   
     const handleCategoryChange = (category) => {
       setSelectedCategories(prev =>
@@ -1144,7 +1279,17 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
                       alt={product.name}
                       className="w-full h-64 object-cover object-center transform group-hover:scale-105 transition-transform duration-300"
                     />
-                    {/* favourite button removed as requested */}
+                            {/* owner-only controls */}
+                            {userId && product.ownerId === userId && (
+                              <div className="absolute top-3 right-3 flex items-center space-x-2">
+                                <button onClick={() => { setEditingItem(product); setIsEditModalVisible(true); }} className="p-2 bg-black/40 hover:bg-black/50 rounded-full text-stone-200">
+                                  <Save size={18} />
+                                </button>
+                                <button onClick={() => handleDeleteMarketplaceItem(product)} className="p-2 bg-black/40 hover:bg-red-600 rounded-full text-red-300">
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            )}
                   </div>
                   <div className="p-4">
                     <h3 className="font-bold text-stone-200">{product.name}</h3>
@@ -1176,13 +1321,10 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
         // ensure id uniqueness
         if (!newProduct.id) newProduct.id = generateId();
 
-        // Immediately show a local preview in the marketplace so the user sees their item right away.
-        const preview = { ...newProduct, ownerId: userId || null };
-        setMarketplaceProducts(prev => [preview, ...prev]);
-
-        // If Firebase isn't configured or user not ready, keep preview and bail out
+        // Require Firebase DB and a user before proceeding — no local fallback.
         if (!db || !userId) {
-          showToast('Item saved locally (no server connection).', 'error');
+          showToast('Unable to upload: no database or user available. Please sign in.', 'error');
+          console.error('handleMarketplaceUpload: missing db or user', { db, userId });
           return;
         }
 
@@ -1221,22 +1363,22 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
             });
 
             const data = await resp.json();
-            if (!resp.ok || !data?.secure_url) {
-              console.error('Cloudinary marketplace upload failed:', data);
-              throw new Error('Cloudinary upload failed');
-            }
+                  if (!resp.ok || !data?.secure_url) {
+                    console.error('Cloudinary marketplace upload failed:', data);
+                    throw new Error('Cloudinary upload failed');
+                  }
 
-            // Use only Cloudinary secure URL (do NOT persist local/object URLs)
-            imageUrl = data.secure_url;
-            cloudinaryPublicId = data.public_id;
-            console.debug('Cloudinary marketplace upload success:', imageUrl, cloudinaryPublicId);
+                  // Use only Cloudinary secure URL (do NOT persist local/object URLs)
+                  imageUrl = data.secure_url;
+                  cloudinaryPublicId = data.public_id;
+                  console.debug('Cloudinary marketplace upload success:', imageUrl, cloudinaryPublicId);
           } else {
             // No file/dataURL provided — abort to avoid storing local preview URLs
             throw new Error('No image provided for marketplace upload');
           }
 
-          // Persist product metadata + image URL to Firestore under artifacts/{appId}/users/{userId}/marketplace
-          const docRef = await addDoc(collection(db, `marketplace/${appId}/${userId}`), {
+          // Persist product metadata + image URL to Firestore under artifacts/{appId}/marketplace
+          const docRef = await addDoc(collection(db, MARKETPLACE_COLLECTION), {
             ownerId: userId,
             name: newProduct.name,
             price: Number(newProduct.price) || null,
@@ -1248,38 +1390,105 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
             timestamp: serverTimestamp(),
           });
 
-          const saved = { ...preview, id: docRef.id, imageUrl, cloudinary_public_id: cloudinaryPublicId || null, ownerId: userId };
-          // Replace preview entry with saved document
-          setMarketplaceProducts(prev => prev.map(p => p.id === preview.id ? saved : p));
-
-          // If the preview used a blob: URL for local preview, revoke it now that the Cloudinary URL is in place
-          try {
-            if (preview?.imageUrl && typeof preview.imageUrl === 'string' && preview.imageUrl.startsWith && preview.imageUrl.startsWith('blob:')) {
-              URL.revokeObjectURL(preview.imageUrl);
-            }
-          } catch (revErr) {
-            console.debug('Error revoking preview object URL:', revErr);
-          }
+          // Firestore write succeeded. We rely on the snapshot listener to populate marketplaceProducts
           showToast('Item listed on marketplace!', 'success');
           console.debug('handleMarketplaceUpload: saved to Firestore, docRef.id=', docRef.id);
         } catch (err) {
           console.error('Error saving marketplace item to Firestore:', err);
-          // If Cloudinary upload succeeded but Firestore write failed, replace the preview
-          // with the Cloudinary URL so the UI still shows the hosted image.
-          try {
-            if (imageUrl && imageUrl.startsWith && imageUrl.startsWith('http')) {
-              setMarketplaceProducts(prev => prev.map(p => p.id === preview.id ? { ...p, imageUrl, cloudinary_public_id: cloudinaryPublicId || null } : p));
-              // Revoke blob preview if present
-              if (preview?.imageUrl && typeof preview.imageUrl === 'string' && preview.imageUrl.startsWith && preview.imageUrl.startsWith('blob:')) {
-                URL.revokeObjectURL(preview.imageUrl);
-              }
-            }
-          } catch (inner) {
-            console.debug('Error updating preview after Cloudinary success but Firestore failure:', inner);
+          // If Firestore write failed, inform the user — no local fallback is performed.
+          if (imageUrl && imageUrl.startsWith && imageUrl.startsWith('http')) {
+            showToast('Image uploaded but saving to database failed. Please try again.', 'error');
+          } else {
+            showToast('Failed to upload item. Please try again.', 'error');
           }
-          showToast('Failed to save to server — item saved locally.', 'error');
         }
       };
+
+    // Delete marketplace item (owner only)
+    const handleDeleteMarketplaceItem = async (product) => {
+      if (!db || !userId) {
+        showToast('Not signed in.', 'error');
+        return;
+      }
+      if (product.ownerId !== userId) {
+        showToast('You are not allowed to delete this item.', 'error');
+        return;
+      }
+      if (!window.confirm('Delete this marketplace item? This cannot be undone.')) return;
+      try {
+    await deleteDoc(doc(db, MARKETPLACE_COLLECTION, product.id));
+        showToast('Item deleted.', 'success');
+        // Note: Cloudinary asset deletion requires a server-side call to the Admin API using your API secret.
+      } catch (e) {
+        console.error('Error deleting marketplace item:', e);
+        showToast('Failed to delete item.', 'error');
+      }
+    };
+
+    // Update marketplace item (owner only). If file provided, upload to Cloudinary then update doc.
+    const handleUpdateMarketplaceItem = async (updated) => {
+      if (!db || !userId) {
+        showToast('Not signed in.', 'error');
+        return;
+      }
+      if (updated.ownerId && updated.ownerId !== userId) {
+        showToast('You are not allowed to edit this item.', 'error');
+        return;
+      }
+      try {
+        let imageUrl = updated.imageUrl || null;
+        let cloudinaryPublicId = updated.cloudinary_public_id || null;
+
+        const dataURLtoBlob = (dataurl) => {
+          const arr = dataurl.split(',');
+          const mime = arr[0].match(/:(.*?);/)[1];
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) u8arr[n] = bstr.charCodeAt(n);
+          return new Blob([u8arr], { type: mime });
+        };
+
+        if (updated.file) {
+          const formData = new FormData();
+          formData.append('file', updated.file);
+          formData.append('upload_preset', 'wardrobe_unsigned');
+          formData.append('folder', `stylesphere/marketplace/${userId}`);
+          const resp = await fetch('https://api.cloudinary.com/v1_1/dgngmm6nt/upload', { method: 'POST', body: formData });
+          const data = await resp.json();
+          if (!resp.ok || !data?.secure_url) {
+            console.error('Cloudinary upload failed during edit:', data);
+            throw new Error('Cloudinary upload failed');
+          }
+          imageUrl = data.secure_url;
+          cloudinaryPublicId = data.public_id;
+        }
+
+        // update Firestore doc
+    if (!updated?.id) throw new Error('Missing item id for update');
+    const itemRef = doc(db, MARKETPLACE_COLLECTION, updated.id);
+        await updateDoc(itemRef, {
+          name: updated.name,
+          price: Number(updated.price) || null,
+          category: updated.category,
+          availability: updated.availability,
+          gender: updated.gender,
+          imageUrl,
+          cloudinary_public_id: cloudinaryPublicId || null,
+          timestamp: serverTimestamp(),
+        });
+        showToast('Item updated.', 'success');
+      } catch (e) {
+        console.error('Error updating marketplace item:', e);
+        if (e?.code === 'permission-denied') {
+          showToast('Permission denied: you are not allowed to edit this item.', 'error');
+        } else if (e?.message && e.message.includes('Missing item id')) {
+          showToast('Update failed: missing item id.', 'error');
+        } else {
+          showToast('Failed to update item.', 'error');
+        }
+      }
+    };
   
   return (
     <AppContext.Provider value={{ setScreen, showToast, isAuthReady, userId }}>
@@ -1419,6 +1628,12 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
           onClose={() => setIsUploadModalVisible(false)}
           onUpload={handleMarketplaceUpload}
           categories={["Tops", "Bottoms", "Footwear"]}
+        />
+        <EditItemModal
+          isVisible={isEditModalVisible}
+          onClose={() => { setIsEditModalVisible(false); setEditingItem(null); }}
+          item={editingItem}
+          onSave={handleUpdateMarketplaceItem}
         />
         {/* Closet upload modal rendered at app root */}
         <UploadClosetModal
