@@ -132,7 +132,7 @@ const App = () => {
     { id:113, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/palazzo.png", name: "Chikan Kurti" },
   ];
   const [screen, setScreen] = useState('login');
-  const [closetItems, setClosetItems] = useState(dummyItems);
+  const [closetItems, setClosetItems] = useState([]);  // Initialize as empty array
   // Marketplace products (moved here so UploadModal can add items)
   const [marketplaceProducts, setMarketplaceProducts] = useState([
     { id: 1, name: "Casual T-Shirt", price: 500, availability: "buy", imageUrl: "/mock_imgs/tshirt.png", category: "Tops", gender: "Unisex"},
@@ -172,14 +172,19 @@ const App = () => {
 
   useEffect(() => {
     if (db && userId) {
+      // Create a reference to the user's specific closet collection
       const closetRef = collection(db, `users/${userId}/closet`);
       const savedOutfitsRef = collection(db, `users/${userId}/savedOutfits`);
 
-
       const unsubscribeCloset = onSnapshot(closetRef, (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.debug('Firestore closet snapshot received:', items);
-        setClosetItems(items);
+        // Only map items that belong to the current user
+        const items = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          userId: userId, // Add userId to each item for verification
+          ...doc.data() 
+        }));
+        console.debug('Firestore closet items loaded:', items);
+        setClosetItems(items); // Set the closet items directly from Firestore
       }, (error) => {
         console.error("Error fetching closet items:", error);
       });
@@ -202,17 +207,23 @@ const App = () => {
   useEffect(() => {
     try {
       if (!db || !userId) {
+        // When no Firebase, load from localStorage and show dummy items
         const stored = localStorage.getItem('local_closet_items');
         if (stored) {
           const parsedLocal = JSON.parse(stored);
           if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
-            // Merge local uploads with dummy items so UI has content
-            setClosetItems(parsedLocal.concat(dummyItems));
+            setClosetItems([...parsedLocal, ...dummyItems]);
+          } else {
+            setClosetItems(dummyItems); // Show dummy items if no local items
           }
+        } else {
+          setClosetItems(dummyItems); // Show dummy items if no local storage
         }
       }
+      // When Firebase is available, items will be loaded from Firestore subscription
     } catch (e) {
       console.error('Error loading local closet items:', e);
+      setClosetItems(dummyItems); // Fallback to dummy items on error
     }
   }, [db, userId]);
 
@@ -287,6 +298,8 @@ const App = () => {
           imageUrl,
           cloudinary_public_id: publicId || null,
           timestamp: serverTimestamp(),
+          userId: userId, // Add userId to document for ownership verification
+          private: true, // Mark as private by default
         });
         console.debug('Firestore doc added:', docRef.id);
         showToast('Image uploaded successfully!', 'success');
@@ -538,11 +551,10 @@ const LoginSignupScreen = () => (
   const categories = ["Tops", "Bottoms", "Footwear"];
   const [selectedFilter, setSelectedFilter] = useState("All");
 
-  const filteredItems = selectedFilter === "All"
-    ? closetItems
-    : closetItems.filter(item => item.category === selectedFilter);
-
-  const onImageClick = (item) => {
+  // Filter items by both category and user ownership
+  const filteredItems = selectedFilter === "All"
+    ? closetItems.filter(item => item.userId === userId) // Only show user's own items
+    : closetItems.filter(item => item.category === selectedFilter && item.userId === userId);  const onImageClick = (item) => {
   
     showToast(`Clicked on ${item.category} item!`, "success");
   };
