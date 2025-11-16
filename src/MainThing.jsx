@@ -1,6 +1,6 @@
-import { useState, useEffect, createContext } from 'react';
-import { signInWithCustomToken, signInAnonymously } from 'firebase/auth';
-import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import React, { useState, useEffect, createContext } from 'react';
+import { signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, setDoc } from 'firebase/firestore';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -32,6 +32,7 @@ const useFirebase = () => {
   const [auth, setAuth] = useState(null);
   const [db, setDb] = useState(null);
   const [userId, setUserId] = useState(null);
+  const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
@@ -41,47 +42,41 @@ const useFirebase = () => {
         setDb(fbDb);
         console.debug('Firebase initialized via src/firebase exports');
 
-        const authenticate = async () => {
+        // Monitor auth state so we can display user displayName/email in the UI
+        const unsubscribe = onAuthStateChanged(fbAuth, (u) => {
+          setUser(u || null);
+          setUserId(u ? u.uid : null);
+          setIsAuthReady(true);
+        });
+
+        // Try to ensure there is a user (anonymous fallback)
+        const ensureAuth = async () => {
           try {
-            // Try to ensure we have an authenticated user (anonymous fallback)
             if (initialAuthToken) {
               try {
                 await signInWithCustomToken(fbAuth, initialAuthToken);
               } catch (e) {
                 console.error('Custom token sign-in failed:', e);
               }
-            } else {
-              // If there's no current user, try anonymous sign-in but handle projects
-              // where anonymous auth is disabled (admin-restricted-operation).
-              if (!fbAuth.currentUser) {
-                try {
-                  await signInAnonymously(fbAuth);
-                } catch (e) {
-                  // Known case when anonymous sign-in is disabled in Firebase console
-                  if (e && e.code === 'auth/admin-restricted-operation') {
-                    console.warn('Anonymous sign-in is disabled for this Firebase project. Continuing without auth.');
-                  } else {
-                    console.error('Anonymous sign-in failed:', e);
-                  }
+            } else if (!fbAuth.currentUser) {
+              try {
+                await signInAnonymously(fbAuth);
+              } catch (e) {
+                if (e && e.code === 'auth/admin-restricted-operation') {
+                  console.warn('Anonymous sign-in is disabled for this Firebase project. Continuing without auth.');
+                } else {
+                  console.error('Anonymous sign-in failed:', e);
                 }
               }
             }
-
-            if (fbAuth.currentUser) {
-              setUserId(fbAuth.currentUser.uid);
-              console.debug('Firebase auth user id:', fbAuth.currentUser.uid);
-            } else {
-              // No authenticated user available; continue but mark auth as ready.
-              console.debug('No Firebase user available after authentication attempts.');
-            }
-          } catch (error) {
-            console.error('Firebase Auth Error (unexpected):', error);
-          } finally {
-            setIsAuthReady(true);
+          } catch (err) {
+            console.error('Error ensuring auth:', err);
           }
         };
 
-        authenticate();
+        ensureAuth();
+
+        return () => unsubscribe();
       } else {
         console.error('Firebase config is not available. Please ensure it is correctly provided.');
         setIsAuthReady(true);
@@ -92,7 +87,7 @@ const useFirebase = () => {
     }
   }, []);
 
-  return { auth, db, userId, isAuthReady };
+  return { auth, db, userId, user, isAuthReady };
 };
 
 const Header = ({ title, onBack, rightButtons }) => (
@@ -113,9 +108,140 @@ const Header = ({ title, onBack, rightButtons }) => (
   </div>
 );
 
+// Small profile menu shown in the top-right of closet/marketplace screens
+const ProfileMenu = ({ user, onLogout }) => {
+  const [open, setOpen] = useState(false);
+  const [profilePic, setProfilePic] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const menuRef = React.useRef(null);
+  const displayText = user?.displayName || user?.email || (user?.uid ? (user.uid.length > 8 ? user.uid.slice(0,8) + '...' : user.uid) : 'Guest');
+
+  // Fetch profile picture from Firestore when user changes
+  useEffect(() => {
+    if (user?.uid && fbDb) {
+      const userDocRef = doc(fbDb, `users/${user.uid}`);
+      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setProfilePic(docSnap.data()?.profilePicture || null);
+        }
+      });
+      return () => unsubscribe();
+    } else {
+      setProfilePic(null);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const handleProfilePicChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    if (isUploading) return;
+
+    setIsUploading(true);
+    try {
+      // Upload to Cloudinary first
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'wardrobe_unsigned');
+      formData.append('folder', `stylesphere/profiles/${user.uid}`);
+
+      const resp = await fetch('https://api.cloudinary.com/v1_1/dgngmm6nt/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error('Upload failed');
+
+      const imageUrl = data.secure_url;
+
+      // Save the Cloudinary URL to Firestore
+      if (user?.uid && fbDb) {
+        const userDocRef = doc(fbDb, `users/${user.uid}`);
+        await setDoc(userDocRef, {
+          profilePicture: imageUrl,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+    } catch (error) {
+      console.error('Error updating profile picture:', error);
+      showToast('Failed to update profile picture', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="relative z-50" ref={menuRef}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center space-x-3 px-4 py-3 rounded-full hover:bg-stone-800/20 transition-colors glassy-button z-50 pointer-events-auto"
+        title="Profile"
+      >
+        {profilePic ? (
+          <img src={profilePic} alt="Profile" className="w-8 h-8 rounded-full object-cover border-2 border-stone-600" />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center border-2 border-stone-600">
+            <User size={18} className="text-stone-300" />
+          </div>
+        )}
+        <span className="hidden sm:inline text-base font-serif text-stone-200">{displayText}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-3 w-72 bg-stone-800/90 border border-stone-700 rounded-xl shadow-lg p-4 z-50 backdrop-blur-md pointer-events-auto">
+          <div className="flex items-center space-x-4 mb-4">
+            <div className="relative group">
+              <label htmlFor="profile-pic-upload" className="cursor-pointer block">
+                {profilePic ? (
+                  <img src={profilePic} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-stone-600 group-hover:opacity-80 transition-opacity" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-stone-700 flex items-center justify-center border-2 border-stone-600 group-hover:bg-stone-600 transition-colors">
+                    <User size={24} className="text-stone-300" />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera size={20} className="text-white" />
+                </div>
+              </label>
+              <input
+                id="profile-pic-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleProfilePicChange}
+                className="hidden"
+              />
+            </div>
+            <div className="flex-1">
+              <div className="text-lg font-serif text-stone-200 mb-1">Signed in as</div>
+              <div className="text-lg text-stone-200 font-serif truncate">{user?.displayName || user?.email || user?.uid || 'Anonymous'}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => { setOpen(false); onLogout && onLogout(); }}
+            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
+          >
+            <span className="font-serif">Logout</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const App = () => {
-  const { auth, db, userId, isAuthReady } = useFirebase();
+  const { auth, db, userId, user, isAuthReady } = useFirebase();
   const dummyItems = [
     { id:101, category: 'Tops', imageUrl: "/mycloset_mock_imgs/tshirt.png", name: "Blue T-shirt" },
     { id:102, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/chikan_kurti.png", name: "Chikan Kurti" },
@@ -132,7 +258,7 @@ const App = () => {
     { id:113, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/palazzo.png", name: "Chikan Kurti" },
   ];
   const [screen, setScreen] = useState('login');
-  const [closetItems, setClosetItems] = useState(dummyItems);
+  const [closetItems, setClosetItems] = useState([]);  // Initialize as empty array
   // Marketplace products (moved here so UploadModal can add items)
   const [marketplaceProducts, setMarketplaceProducts] = useState([
     { id: 1, name: "Casual T-Shirt", price: 500, availability: "buy", imageUrl: "/mock_imgs/tshirt.png", category: "Tops", gender: "Unisex"},
@@ -172,14 +298,19 @@ const App = () => {
 
   useEffect(() => {
     if (db && userId) {
+      // Create a reference to the user's specific closet collection
       const closetRef = collection(db, `users/${userId}/closet`);
       const savedOutfitsRef = collection(db, `users/${userId}/savedOutfits`);
 
-
       const unsubscribeCloset = onSnapshot(closetRef, (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.debug('Firestore closet snapshot received:', items);
-        setClosetItems(items);
+        // Only map items that belong to the current user
+        const items = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          userId: userId, // Add userId to each item for verification
+          ...doc.data() 
+        }));
+        console.debug('Firestore closet items loaded:', items);
+        setClosetItems(items); // Set the closet items directly from Firestore
       }, (error) => {
         console.error("Error fetching closet items:", error);
       });
@@ -202,17 +333,23 @@ const App = () => {
   useEffect(() => {
     try {
       if (!db || !userId) {
+        // When no Firebase, load from localStorage and show dummy items
         const stored = localStorage.getItem('local_closet_items');
         if (stored) {
           const parsedLocal = JSON.parse(stored);
           if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
-            // Merge local uploads with dummy items so UI has content
-            setClosetItems(parsedLocal.concat(dummyItems));
+            setClosetItems([...parsedLocal, ...dummyItems]);
+          } else {
+            setClosetItems(dummyItems); // Show dummy items if no local items
           }
+        } else {
+          setClosetItems(dummyItems); // Show dummy items if no local storage
         }
       }
+      // When Firebase is available, items will be loaded from Firestore subscription
     } catch (e) {
       console.error('Error loading local closet items:', e);
+      setClosetItems(dummyItems); // Fallback to dummy items on error
     }
   }, [db, userId]);
 
@@ -225,6 +362,19 @@ const App = () => {
 
   const handleLoginSignup = async () => {
     setScreen('dashboard');
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (auth) {
+        await signOut(auth);
+      }
+      setScreen('login');
+      showToast('Logged out successfully.', 'success');
+    } catch (e) {
+      console.error('Logout failed:', e);
+      showToast('Logout failed.', 'error');
+    }
   };
 
   const handleUploadImage = async (category, file) => {
@@ -287,6 +437,8 @@ const App = () => {
           imageUrl,
           cloudinary_public_id: publicId || null,
           timestamp: serverTimestamp(),
+          userId: userId, // Add userId to document for ownership verification
+          private: true, // Mark as private by default
         });
         console.debug('Firestore doc added:', docRef.id);
         showToast('Image uploaded successfully!', 'success');
@@ -421,13 +573,17 @@ const App = () => {
           title="StyleSphere"
           onBack={screen !== 'dashboard' ? () => setScreen('dashboard') : null}
           rightButtons={
-            <button
-              onClick={() => setScreen('dashboard')}
-              className="flex items-center space-x-2 px-4 py-2 bg-stone-800/50 rounded-full hover:bg-stone-700/50 transition-colors text-sm font-semibold lg:hidden glassy-button"
-            >
-              <User size={20} />
-              <span className="hidden sm:inline">User ID</span>
-            </button>
+            screen === 'dashboard' ? (
+              <ProfileMenu user={user} onLogout={handleLogout} />
+            ) : (
+              <button
+                onClick={() => setScreen('dashboard')}
+                className="flex items-center space-x-2 px-4 py-2 bg-stone-800/50 rounded-full hover:bg-stone-700/50 transition-colors text-sm font-semibold lg:hidden glassy-button"
+              >
+                <User size={20} />
+                <span className="hidden sm:inline">User ID</span>
+              </button>
+            )
           }
         />
         <main className="flex-grow overflow-y-auto w-full">
@@ -538,11 +694,10 @@ const LoginSignupScreen = () => (
   const categories = ["Tops", "Bottoms", "Footwear"];
   const [selectedFilter, setSelectedFilter] = useState("All");
 
-  const filteredItems = selectedFilter === "All"
-    ? closetItems
-    : closetItems.filter(item => item.category === selectedFilter);
-
-  const onImageClick = (item) => {
+  // Filter items by both category and user ownership
+  const filteredItems = selectedFilter === "All"
+    ? closetItems.filter(item => item.userId === userId) // Only show user's own items
+    : closetItems.filter(item => item.category === selectedFilter && item.userId === userId);  const onImageClick = (item) => {
   
     showToast(`Clicked on ${item.category} item!`, "success");
   };
