@@ -1452,14 +1452,17 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
                     <p className="text-sm text-stone-400">{product.category}</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-lg font-bold text-purple-600">₹{product.price}</span>
-                      <button
-                        onClick={() => handlePurchase(product)}
-                        className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors glassy-button-marketplace ${
-                          product.availability === "buy" ? "bg-purple-600/60 hover:bg-purple-700/60" : "bg-teal-500/60 hover:bg-teal-600/60"
-                        }`}
-                      >
-                        {product.availability === "buy" ? "Buy" : "Rent"}
-                      </button>
+                      {/* Show Buy/Rent only for users who are NOT the owner */}
+                      {userId && product.ownerId !== userId && (
+                        <button
+                          onClick={() => handlePurchase(product)}
+                          className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors glassy-button-marketplace ${
+                            product.availability === "buy" ? "bg-purple-600/60 hover:bg-purple-700/60" : "bg-teal-500/60 hover:bg-teal-600/60"
+                          }`}
+                        >
+                          {product.availability === "buy" ? "Buy" : "Rent"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1666,10 +1669,6 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
       try {
         if (!userId) {
           showToast('Please sign in to purchase or rent an item.', 'error');
-          return;
-        }
-        if (product.ownerId === userId) {
-          showToast("You can't purchase or rent your own listing.", 'error');
           return;
         }
 
