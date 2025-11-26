@@ -1452,9 +1452,12 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
                     <p className="text-sm text-stone-400">{product.category}</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-lg font-bold text-purple-600">₹{product.price}</span>
-                      <button className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors glassy-button-marketplace ${
-                        product.availability === "buy" ? "bg-purple-600/60 hover:bg-purple-700/60" : "bg-teal-500/60 hover:bg-teal-600/60"
-                      }`}>
+                      <button
+                        onClick={() => handlePurchase(product)}
+                        className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors glassy-button-marketplace ${
+                          product.availability === "buy" ? "bg-purple-600/60 hover:bg-purple-700/60" : "bg-teal-500/60 hover:bg-teal-600/60"
+                        }`}
+                      >
                         {product.availability === "buy" ? "Buy" : "Rent"}
                       </button>
                     </div>
@@ -1643,6 +1646,90 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
         } else {
           showToast('Failed to update item.', 'error');
         }
+      }
+    };
+
+    // --- Razorpay demo integration (client-only sandbox) ---
+    // Note: For production, create orders server-side and use the order_id value here.
+    const loadRazorpayScript = () => {
+      return new Promise((resolve, reject) => {
+        if (window.Razorpay) return resolve(true);
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error('Razorpay script failed to load'));
+        document.body.appendChild(script);
+      });
+    };
+
+    const handlePurchase = async (product) => {
+      try {
+        if (!userId) {
+          showToast('Please sign in to purchase or rent an item.', 'error');
+          return;
+        }
+        if (product.ownerId === userId) {
+          showToast("You can't purchase or rent your own listing.", 'error');
+          return;
+        }
+
+        await loadRazorpayScript();
+
+        const amount = (Number(product.price) || 0) * 100; // paise
+
+        const options = {
+          key: 'rzp_test_1DP5mmOlF5G5ag', // Razorpay test key (demo)
+          amount: amount,
+          currency: 'INR',
+          name: 'StyleSphere',
+          description: `${product.availability === 'rent' ? 'Rent' : 'Buy'}: ${product.name}`,
+          image: product.imageUrl || undefined,
+          handler: function (response) {
+            // Successful payment callback (client-only). In production, verify payment on server.
+            console.debug('Razorpay payment success response:', response);
+            showToast('Payment successful! Thank you.', 'success');
+            // Optionally record the transaction in Firestore (demo: store minimal record)
+            try {
+              if (db && userId) {
+                // Store demo transaction under the buyer's user document as requested
+                addDoc(collection(db, `users/${userId}/transaction`), {
+                  productId: product.id,
+                  productName: product.name,
+                  buyerId: userId,
+                  sellerId: product.ownerId || null,
+                  amount: Number(product.price) || 0,
+                  currency: 'INR',
+                  paymentId: response.razorpay_payment_id,
+                  method: 'razorpay_test_client',
+                  timestamp: serverTimestamp(),
+                }).catch(e => console.warn('Failed to save demo transaction:', e));
+              }
+            } catch (e) {
+              console.warn('Transaction recording skipped:', e);
+            }
+          },
+          prefill: {
+            name: user?.displayName || '',
+            email: user?.email || '',
+          },
+          // allow user to close modal before entering optional fields like phone
+          modal: {
+            ondismiss: function() {
+              showToast('Payment cancelled or closed.', 'error');
+            }
+          },
+          notes: {
+            product_id: product.id,
+            product_name: product.name,
+          },
+          theme: { color: '#6D28D9' },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      } catch (err) {
+        console.error('Error opening Razorpay checkout:', err);
+        showToast('Unable to open payment gateway. Please try again later.', 'error');
       }
     };
   
