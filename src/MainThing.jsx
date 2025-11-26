@@ -246,21 +246,6 @@ const ProfileMenu = ({ user, onLogout }) => {
 
 const App = () => {
   const { auth, db, userId, user, isAuthReady } = useFirebase();
-  const dummyItems = [
-    { id:101, category: 'Tops', imageUrl: "/mycloset_mock_imgs/tshirt.png", name: "Blue T-shirt" },
-    { id:102, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/chikan_kurti.png", name: "Chikan Kurti" },
-    { id:103, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/sweatshirt.png", name: "Chikan Kurti" },
-    { id:104, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/jeans.png", name: "Blue T-shirt" },
-    { id:105, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/denim_shorts.png", name: "Blue T-shirt" },
-    { id:106, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/heels.png", name: "Blue T-shirt" },
-    { id:107, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/nike_sneakers.png", name: "Blue T-shirt" },
-    { id:108, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/converse.png", name: "Blue T-shirt" },
-    { id:109, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/winter_coat.png", name: "Chikan Kurti" },
-    { id:110, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/trouser.png", name: "Chikan Kurti" },
-    { id:111, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/adi.png", name: "Chikan Kurti" },
-    { id:112, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/leather_jacket.png", name: "Chikan Kurti" },
-    { id:113, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/palazzo.png", name: "Chikan Kurti" },
-  ];
   const [screen, setScreen] = useState('login');
   const [closetItems, setClosetItems] = useState([]);  // Initialize as empty array
   // Marketplace products (moved here so UploadModal can add items)
@@ -272,6 +257,9 @@ const App = () => {
   // Edit modal visibility and currently editing item
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  // Closet edit modal visibility and currently editing closet item
+  const [isEditClosetModalVisible, setIsEditClosetModalVisible] = useState(false);
+  const [editingClosetItem, setEditingClosetItem] = useState(null);
   // Closet upload modal visibility
   const [isClosetUploadModalVisible, setIsClosetUploadModalVisible] = useState(false);
   const [savedOutfits, setSavedOutfits] = useState([]);
@@ -342,23 +330,23 @@ const App = () => {
   useEffect(() => {
     try {
       if (!db || !userId) {
-        // When no Firebase, load from localStorage and show dummy items
+        // When no Firebase, load from localStorage
         const stored = localStorage.getItem('local_closet_items');
         if (stored) {
           const parsedLocal = JSON.parse(stored);
           if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
-            setClosetItems([...parsedLocal, ...dummyItems]);
+            setClosetItems(parsedLocal);
           } else {
-            setClosetItems(dummyItems); // Show dummy items if no local items
+            setClosetItems([]); // Show empty closet if no local items
           }
         } else {
-          setClosetItems(dummyItems); // Show dummy items if no local storage
+          setClosetItems([]); // Show empty closet if no local storage
         }
       }
       // When Firebase is available, items will be loaded from Firestore subscription
     } catch (e) {
       console.error('Error loading local closet items:', e);
-      setClosetItems(dummyItems); // Fallback to dummy items on error
+      setClosetItems([]); // Fallback to empty closet on error
     }
   }, [db, userId]);
 
@@ -520,6 +508,37 @@ const App = () => {
     } catch (e) {
       console.error('Error deleting closet item:', e);
       showToast('Error deleting item.', 'error');
+    }
+  };
+
+  const handleEditClosetItem = async (updated) => {
+    // If Firebase isn't configured, update localStorage fallback
+    if (!db || !userId) {
+      try {
+        const prevLocal = JSON.parse(localStorage.getItem('local_closet_items') || '[]');
+        const updatedLocal = prevLocal.map(i => i.id === updated.id ? { ...i, category: updated.category } : i);
+        localStorage.setItem('local_closet_items', JSON.stringify(updatedLocal));
+        // Also update current UI state
+        setClosetItems(prev => Array.isArray(prev) ? prev.map(i => i.id === updated.id ? { ...i, category: updated.category } : i) : prev);
+        showToast('Category updated.', 'success');
+      } catch (e) {
+        console.error('Error updating local closet item:', e);
+        showToast('Error updating item.', 'error');
+      }
+      return;
+    }
+
+    try {
+      // Update Firestore document with new category
+      const itemRef = doc(db, `users/${userId}/closet`, updated.id);
+      await updateDoc(itemRef, {
+        category: updated.category,
+        timestamp: serverTimestamp(),
+      });
+      showToast('Category updated.', 'success');
+    } catch (e) {
+      console.error('Error updating closet item:', e);
+      showToast('Error updating item.', 'error');
     }
   };
 
@@ -759,10 +778,17 @@ const LoginSignupScreen = () => (
                       alt={item.category}
                       className="w-full h-48 object-cover object-center"
                     />
-                    {/* delete button - shown on hover */}
+                    {/* edit and delete buttons - shown on hover */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingClosetItem(item); setIsEditClosetModalVisible(true); }}
+                      className="absolute top-2 left-2 bg-black/40 p-2 rounded-full text-stone-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
+                      title="Edit category"
+                    >
+                      <Sparkle size={16} />
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteClosetItem(item); }}
-                      className="absolute top-2 right-2 bg-black/40 p-2 rounded-full text-stone-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-2 right-2 bg-black/40 p-2 rounded-full text-stone-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
                       title="Delete"
                     >
                       <Trash2 size={16} />
@@ -1075,6 +1101,67 @@ const EditItemModal = ({ isVisible, onClose, item, onSave }) => {
           <div className="flex space-x-2">
             <button type="submit" className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg">Save</button>
             <button type="button" onClick={onClose} className="flex-1 bg-stone-700 hover:bg-stone-600 text-white font-semibold py-3 rounded-lg">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Modal for editing closet item category
+const EditClosetItemModal = ({ isVisible, onClose, item, onSave }) => {
+  const [category, setCategory] = useState(item?.category || 'Tops');
+  const categories = ['Tops', 'Bottoms', 'Footwear'];
+
+  useEffect(() => {
+    setCategory(item?.category || 'Tops');
+  }, [item]);
+
+  if (!isVisible) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ ...item, category });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+      <div className="bg-stone-800 p-6 rounded-xl w-full max-w-md shadow-2xl border border-purple-700/50">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Edit Item Category</h2>
+          <button onClick={onClose} className="p-2 text-stone-400 hover:text-white rounded-full transition-colors"><X size={24} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="mb-4">
+            <img src={item?.imageUrl} alt="Item preview" className="w-full h-40 object-cover rounded-lg mb-4" />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-stone-300 mb-2 font-medium">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="p-3 rounded-lg bg-stone-700 text-white border border-stone-600 focus:border-purple-500 focus:outline-none"
+            >
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex space-x-4 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-3 bg-stone-700 hover:bg-stone-600 text-white rounded-lg font-semibold transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors"
+            >
+              Save
+            </button>
           </div>
         </form>
       </div>
@@ -1876,6 +1963,12 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
           onClose={() => { setIsEditModalVisible(false); setEditingItem(null); }}
           item={editingItem}
           onSave={handleUpdateMarketplaceItem}
+        />
+        <EditClosetItemModal
+          isVisible={isEditClosetModalVisible}
+          onClose={() => { setIsEditClosetModalVisible(false); setEditingClosetItem(null); }}
+          item={editingClosetItem}
+          onSave={handleEditClosetItem}
         />
         {/* Closet upload modal rendered at app root */}
         <UploadClosetModal
