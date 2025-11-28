@@ -1,17 +1,17 @@
-import { useState, useEffect, createContext } from 'react';
-import { signInWithCustomToken, signInAnonymously } from 'firebase/auth';
-import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, query, orderBy, updateDoc } from 'firebase/firestore';
+import React, { useState, useEffect, createContext } from 'react';
+import { signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, setDoc, query, orderBy, updateDoc } from 'firebase/firestore';
 import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+
 
 // ✅ Use your properly exported Firebase services
 import { auth as fbAuth, db as fbDb } from './firebase';
 
 import LiquidEther from './LiquidEther';
-import PrismaticBurst from './PrismaticBurst';
-import Orb from './Orb';
 import Aurora from './Aurora';
 import AuthPage from './AuthPage';
+import Silk from './Silk';
 
 
 
@@ -35,6 +35,7 @@ const useFirebase = () => {
   const [auth, setAuth] = useState(null);
   const [db, setDb] = useState(null);
   const [userId, setUserId] = useState(null);
+  const [user, setUser] = useState(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
@@ -44,47 +45,41 @@ const useFirebase = () => {
         setDb(fbDb);
         console.debug('Firebase initialized via src/firebase exports');
 
-        const authenticate = async () => {
+        // Monitor auth state so we can display user displayName/email in the UI
+        const unsubscribe = onAuthStateChanged(fbAuth, (u) => {
+          setUser(u || null);
+          setUserId(u ? u.uid : null);
+          setIsAuthReady(true);
+        });
+
+        // Try to ensure there is a user (anonymous fallback)
+        const ensureAuth = async () => {
           try {
-            // Try to ensure we have an authenticated user (anonymous fallback)
             if (initialAuthToken) {
               try {
                 await signInWithCustomToken(fbAuth, initialAuthToken);
               } catch (e) {
                 console.error('Custom token sign-in failed:', e);
               }
-            } else {
-              // If there's no current user, try anonymous sign-in but handle projects
-              // where anonymous auth is disabled (admin-restricted-operation).
-              if (!fbAuth.currentUser) {
-                try {
-                  await signInAnonymously(fbAuth);
-                } catch (e) {
-                  // Known case when anonymous sign-in is disabled in Firebase console
-                  if (e && e.code === 'auth/admin-restricted-operation') {
-                    console.warn('Anonymous sign-in is disabled for this Firebase project. Continuing without auth.');
-                  } else {
-                    console.error('Anonymous sign-in failed:', e);
-                  }
+            } else if (!fbAuth.currentUser) {
+              try {
+                await signInAnonymously(fbAuth);
+              } catch (e) {
+                if (e && e.code === 'auth/admin-restricted-operation') {
+                  console.warn('Anonymous sign-in is disabled for this Firebase project. Continuing without auth.');
+                } else {
+                  console.error('Anonymous sign-in failed:', e);
                 }
               }
             }
-
-            if (fbAuth.currentUser) {
-              setUserId(fbAuth.currentUser.uid);
-              console.debug('Firebase auth user id:', fbAuth.currentUser.uid);
-            } else {
-              // No authenticated user available; continue but mark auth as ready.
-              console.debug('No Firebase user available after authentication attempts.');
-            }
-          } catch (error) {
-            console.error('Firebase Auth Error (unexpected):', error);
-          } finally {
-            setIsAuthReady(true);
+          } catch (err) {
+            console.error('Error ensuring auth:', err);
           }
         };
 
-        authenticate();
+        ensureAuth();
+
+        return () => unsubscribe();
       } else {
         console.error('Firebase config is not available. Please ensure it is correctly provided.');
         setIsAuthReady(true);
@@ -95,7 +90,7 @@ const useFirebase = () => {
     }
   }, []);
 
-  return { auth, db, userId, isAuthReady };
+  return { auth, db, userId, user, isAuthReady };
 };
 
 const Header = ({ title, onBack, rightButtons }) => (
@@ -116,26 +111,142 @@ const Header = ({ title, onBack, rightButtons }) => (
   </div>
 );
 
+// Small profile menu shown in the top-right of closet/marketplace screens
+const ProfileMenu = ({ user, onLogout }) => {
+  const [open, setOpen] = useState(false);
+  const [profilePic, setProfilePic] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const menuRef = React.useRef(null);
+  const displayText = user?.displayName || user?.email || (user?.uid ? (user.uid.length > 8 ? user.uid.slice(0,8) + '...' : user.uid) : 'Guest');
+
+  // Fetch profile picture from Firestore when user changes
+  useEffect(() => {
+    if (user?.uid && fbDb) {
+      const userDocRef = doc(fbDb, `users/${user.uid}`);
+      const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setProfilePic(docSnap.data()?.profilePicture || null);
+        }
+      });
+      return () => unsubscribe();
+    } else {
+      setProfilePic(null);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const handleProfilePicChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    if (isUploading) return;
+
+    setIsUploading(true);
+    try {
+      // Upload to Cloudinary first
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'wardrobe_unsigned');
+      formData.append('folder', `stylesphere/profiles/${user.uid}`);
+
+      const resp = await fetch('https://api.cloudinary.com/v1_1/dgngmm6nt/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) throw new Error('Upload failed');
+
+      const imageUrl = data.secure_url;
+
+      // Save the Cloudinary URL to Firestore
+      if (user?.uid && fbDb) {
+        const userDocRef = doc(fbDb, `users/${user.uid}`);
+        await setDoc(userDocRef, {
+          profilePicture: imageUrl,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+    } catch (error) {
+      console.error('Error updating profile picture:', error);
+      showToast('Failed to update profile picture', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="relative z-50" ref={menuRef}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center space-x-3 px-4 py-3 rounded-full hover:bg-stone-800/20 transition-colors glassy-button z-50 pointer-events-auto"
+        title="Profile"
+      >
+        {profilePic ? (
+          <img src={profilePic} alt="Profile" className="w-8 h-8 rounded-full object-cover border-2 border-stone-600" />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center border-2 border-stone-600">
+            <User size={18} className="text-stone-300" />
+          </div>
+        )}
+        <span className="hidden sm:inline text-base font-serif text-stone-200">{displayText}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-3 w-72 bg-stone-800/90 border border-stone-700 rounded-xl shadow-lg p-4 z-50 backdrop-blur-md pointer-events-auto">
+          <div className="flex items-center space-x-4 mb-4">
+            <div className="relative group">
+              <label htmlFor="profile-pic-upload" className="cursor-pointer block">
+                {profilePic ? (
+                  <img src={profilePic} alt="Profile" className="w-16 h-16 rounded-full object-cover border-2 border-stone-600 group-hover:opacity-80 transition-opacity" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-stone-700 flex items-center justify-center border-2 border-stone-600 group-hover:bg-stone-600 transition-colors">
+                    <User size={24} className="text-stone-300" />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Camera size={20} className="text-white" />
+                </div>
+              </label>
+              <input
+                id="profile-pic-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleProfilePicChange}
+                className="hidden"
+              />
+            </div>
+            <div className="flex-1">
+              <div className="text-lg font-serif text-stone-200 mb-1">Signed in as</div>
+              <div className="text-lg text-stone-200 font-serif truncate">{user?.displayName || user?.email || user?.uid || 'Anonymous'}</div>
+            </div>
+          </div>
+          <button
+            onClick={() => { setOpen(false); onLogout && onLogout(); }}
+            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors"
+          >
+            <span className="font-serif">Logout</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const App = () => {
-  const { auth, db, userId, isAuthReady } = useFirebase();
-  const dummyItems = [
-    { id:101, category: 'Tops', imageUrl: "/mycloset_mock_imgs/tshirt.png", name: "Blue T-shirt" },
-    { id:102, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/chikan_kurti.png", name: "Chikan Kurti" },
-    { id:103, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/sweatshirt.png", name: "Chikan Kurti" },
-    { id:104, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/jeans.png", name: "Blue T-shirt" },
-    { id:105, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/denim_shorts.png", name: "Blue T-shirt" },
-    { id:106, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/heels.png", name: "Blue T-shirt" },
-    { id:107, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/nike_sneakers.png", name: "Blue T-shirt" },
-    { id:108, category: 'Footwear', imageUrl:  "/mycloset_mock_imgs/converse.png", name: "Blue T-shirt" },
-    { id:109, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/winter_coat.png", name: "Chikan Kurti" },
-    { id:110, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/trouser.png", name: "Chikan Kurti" },
-    { id:111, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/adi.png", name: "Chikan Kurti" },
-    { id:112, category: 'Tops', imageUrl:  "/mycloset_mock_imgs/leather_jacket.png", name: "Chikan Kurti" },
-    { id:113, category: 'Bottoms', imageUrl:  "/mycloset_mock_imgs/palazzo.png", name: "Chikan Kurti" },
-  ];
+  const { auth, db, userId, user, isAuthReady } = useFirebase();
   const [screen, setScreen] = useState('login');
-  const [closetItems, setClosetItems] = useState(dummyItems);
+  const [closetItems, setClosetItems] = useState([]);  // Initialize as empty array
   // Marketplace products (moved here so UploadModal can add items)
   // Start with an empty marketplace; items are added by user uploads and Firestore sync.
   const [marketplaceProducts, setMarketplaceProducts] = useState([]);
@@ -145,6 +256,9 @@ const App = () => {
   // Edit modal visibility and currently editing item
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  // Closet edit modal visibility and currently editing closet item
+  const [isEditClosetModalVisible, setIsEditClosetModalVisible] = useState(false);
+  const [editingClosetItem, setEditingClosetItem] = useState(null);
   // Closet upload modal visibility
   const [isClosetUploadModalVisible, setIsClosetUploadModalVisible] = useState(false);
   const [savedOutfits, setSavedOutfits] = useState([]);
@@ -160,14 +274,19 @@ const App = () => {
 
   useEffect(() => {
     if (db && userId) {
+      // Create a reference to the user's specific closet collection
       const closetRef = collection(db, `users/${userId}/closet`);
       const savedOutfitsRef = collection(db, `users/${userId}/savedOutfits`);
 
-
       const unsubscribeCloset = onSnapshot(closetRef, (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        console.debug('Firestore closet snapshot received:', items);
-        setClosetItems(items);
+        // Only map items that belong to the current user
+        const items = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          userId: userId, // Add userId to each item for verification
+          ...doc.data() 
+        }));
+        console.debug('Firestore closet items loaded:', items);
+        setClosetItems(items); // Set the closet items directly from Firestore
       }, (error) => {
         console.error("Error fetching closet items:", error);
       });
@@ -210,17 +329,23 @@ const App = () => {
   useEffect(() => {
     try {
       if (!db || !userId) {
+        // When no Firebase, load from localStorage
         const stored = localStorage.getItem('local_closet_items');
         if (stored) {
           const parsedLocal = JSON.parse(stored);
           if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
-            // Merge local uploads with dummy items so UI has content
-            setClosetItems(parsedLocal.concat(dummyItems));
+            setClosetItems(parsedLocal);
+          } else {
+            setClosetItems([]); // Show empty closet if no local items
           }
+        } else {
+          setClosetItems([]); // Show empty closet if no local storage
         }
       }
+      // When Firebase is available, items will be loaded from Firestore subscription
     } catch (e) {
       console.error('Error loading local closet items:', e);
+      setClosetItems([]); // Fallback to empty closet on error
     }
   }, [db, userId]);
 
@@ -233,6 +358,19 @@ const App = () => {
 
   const handleLoginSignup = async () => {
     setScreen('dashboard');
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (auth) {
+        await signOut(auth);
+      }
+      setScreen('login');
+      showToast('Logged out successfully.', 'success');
+    } catch (e) {
+      console.error('Logout failed:', e);
+      showToast('Logout failed.', 'error');
+    }
   };
 
   const handleUploadImage = async (category, file) => {
@@ -295,6 +433,8 @@ const App = () => {
           imageUrl,
           cloudinary_public_id: publicId || null,
           timestamp: serverTimestamp(),
+          userId: userId, // Add userId to document for ownership verification
+          private: true, // Mark as private by default
         });
         console.debug('Firestore doc added:', docRef.id);
         showToast('Image uploaded successfully!', 'success');
@@ -370,6 +510,37 @@ const App = () => {
     }
   };
 
+  const handleEditClosetItem = async (updated) => {
+    // If Firebase isn't configured, update localStorage fallback
+    if (!db || !userId) {
+      try {
+        const prevLocal = JSON.parse(localStorage.getItem('local_closet_items') || '[]');
+        const updatedLocal = prevLocal.map(i => i.id === updated.id ? { ...i, category: updated.category } : i);
+        localStorage.setItem('local_closet_items', JSON.stringify(updatedLocal));
+        // Also update current UI state
+        setClosetItems(prev => Array.isArray(prev) ? prev.map(i => i.id === updated.id ? { ...i, category: updated.category } : i) : prev);
+        showToast('Category updated.', 'success');
+      } catch (e) {
+        console.error('Error updating local closet item:', e);
+        showToast('Error updating item.', 'error');
+      }
+      return;
+    }
+
+    try {
+      // Update Firestore document with new category
+      const itemRef = doc(db, `users/${userId}/closet`, updated.id);
+      await updateDoc(itemRef, {
+        category: updated.category,
+        timestamp: serverTimestamp(),
+      });
+      showToast('Category updated.', 'success');
+    } catch (e) {
+      console.error('Error updating closet item:', e);
+      showToast('Error updating item.', 'error');
+    }
+  };
+
   const handleRemoveOutfit = () => {
     setSelectedOutfitItems({
       Head: null,
@@ -417,25 +588,30 @@ const App = () => {
     <div className="relative flex flex-col w-full h-screen bg-transparent text-stone-200">
       {/* top-right upload button removed (upload action moved above Filters in Marketplace) */}
       <div className="absolute inset-0 -z-10 bg-black overflow-hidden" >
-        <Orb
-        hoverIntensity={0.5}
-        rotateOnHover={true}
-        hue={0}
-        forceHoverState={false}
-      />
+        <Silk
+  speed={3.8}
+  scale={0.7}
+  color="#2a2956"
+  noiseIntensity={0}
+  rotation={0}
+/>
       </div>
       <div className="flex flex-col flex-grow overflow-hidden z-0">
         <Header
           title="StyleSphere"
           onBack={screen !== 'dashboard' ? () => setScreen('dashboard') : null}
           rightButtons={
-            <button
-              onClick={() => setScreen('dashboard')}
-              className="flex items-center space-x-2 px-4 py-2 bg-stone-800/50 rounded-full hover:bg-stone-700/50 transition-colors text-sm font-semibold lg:hidden glassy-button"
-            >
-              <User size={20} />
-              <span className="hidden sm:inline">User ID</span>
-            </button>
+            screen === 'dashboard' ? (
+              <ProfileMenu user={user} onLogout={handleLogout} />
+            ) : (
+              <button
+                onClick={() => setScreen('dashboard')}
+                className="flex items-center space-x-2 px-4 py-2 bg-stone-800/50 rounded-full hover:bg-stone-700/50 transition-colors text-sm font-semibold lg:hidden glassy-button"
+              >
+                <User size={20} />
+                <span className="hidden sm:inline">User ID</span>
+              </button>
+            )
           }
         />
         <main className="flex-grow overflow-y-auto w-full">
@@ -546,11 +722,10 @@ const LoginSignupScreen = () => (
   const categories = ["Tops", "Bottoms", "Footwear"];
   const [selectedFilter, setSelectedFilter] = useState("All");
 
-  const filteredItems = selectedFilter === "All"
-    ? closetItems
-    : closetItems.filter(item => item.category === selectedFilter);
-
-  const onImageClick = (item) => {
+  // Filter items by both category and user ownership
+  const filteredItems = selectedFilter === "All"
+    ? closetItems.filter(item => item.userId === userId) // Only show user's own items
+    : closetItems.filter(item => item.category === selectedFilter && item.userId === userId);  const onImageClick = (item) => {
   
     showToast(`Clicked on ${item.category} item!`, "success");
   };
@@ -603,10 +778,17 @@ const LoginSignupScreen = () => (
                       alt={item.category}
                       className="w-full h-48 object-cover object-center"
                     />
-                    {/* delete button - shown on hover */}
+                    {/* edit and delete buttons - shown on hover */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingClosetItem(item); setIsEditClosetModalVisible(true); }}
+                      className="absolute top-2 left-2 bg-black/40 p-2 rounded-full text-stone-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
+                      title="Edit category"
+                    >
+                      <Sparkle size={16} />
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteClosetItem(item); }}
-                      className="absolute top-2 right-2 bg-black/40 p-2 rounded-full text-stone-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-2 right-2 bg-black/40 p-2 rounded-full text-stone-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
                       title="Delete"
                     >
                       <Trash2 size={16} />
@@ -919,6 +1101,67 @@ const EditItemModal = ({ isVisible, onClose, item, onSave }) => {
           <div className="flex space-x-2">
             <button type="submit" className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-lg">Save</button>
             <button type="button" onClick={onClose} className="flex-1 bg-stone-700 hover:bg-stone-600 text-white font-semibold py-3 rounded-lg">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Modal for editing closet item category
+const EditClosetItemModal = ({ isVisible, onClose, item, onSave }) => {
+  const [category, setCategory] = useState(item?.category || 'Tops');
+  const categories = ['Tops', 'Bottoms', 'Footwear'];
+
+  useEffect(() => {
+    setCategory(item?.category || 'Tops');
+  }, [item]);
+
+  if (!isVisible) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave({ ...item, category });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+      <div className="bg-stone-800 p-6 rounded-xl w-full max-w-md shadow-2xl border border-purple-700/50">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Edit Item Category</h2>
+          <button onClick={onClose} className="p-2 text-stone-400 hover:text-white rounded-full transition-colors"><X size={24} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="mb-4">
+            <img src={item?.imageUrl} alt="Item preview" className="w-full h-40 object-cover rounded-lg mb-4" />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-stone-300 mb-2 font-medium">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="p-3 rounded-lg bg-stone-700 text-white border border-stone-600 focus:border-purple-500 focus:outline-none"
+            >
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex space-x-4 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-3 bg-stone-700 hover:bg-stone-600 text-white rounded-lg font-semibold transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors"
+            >
+              Save
+            </button>
           </div>
         </form>
       </div>
@@ -1296,11 +1539,17 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
                     <p className="text-sm text-stone-400">{product.category}</p>
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-lg font-bold text-purple-600">₹{product.price}</span>
-                      <button className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors glassy-button-marketplace ${
-                        product.availability === "buy" ? "bg-purple-600/60 hover:bg-purple-700/60" : "bg-teal-500/60 hover:bg-teal-600/60"
-                      }`}>
-                        {product.availability === "buy" ? "Buy" : "Rent"}
-                      </button>
+                      {/* Show Buy/Rent only for users who are NOT the owner */}
+                      {userId && product.ownerId !== userId && (
+                        <button
+                          onClick={() => handlePurchase(product)}
+                          className={`px-4 py-2 text-sm font-semibold rounded-full transition-colors glassy-button-marketplace ${
+                            product.availability === "buy" ? "bg-purple-600/60 hover:bg-purple-700/60" : "bg-teal-500/60 hover:bg-teal-600/60"
+                          }`}
+                        >
+                          {product.availability === "buy" ? "Buy" : "Rent"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1489,6 +1738,86 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
         }
       }
     };
+
+    // --- Razorpay demo integration (client-only sandbox) ---
+    // Note: For production, create orders server-side and use the order_id value here.
+    const loadRazorpayScript = () => {
+      return new Promise((resolve, reject) => {
+        if (window.Razorpay) return resolve(true);
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => resolve(true);
+        script.onerror = () => reject(new Error('Razorpay script failed to load'));
+        document.body.appendChild(script);
+      });
+    };
+
+    const handlePurchase = async (product) => {
+      try {
+        if (!userId) {
+          showToast('Please sign in to purchase or rent an item.', 'error');
+          return;
+        }
+
+        await loadRazorpayScript();
+
+        const amount = (Number(product.price) || 0) * 100; // paise
+
+        const options = {
+          key: 'rzp_test_1DP5mmOlF5G5ag', // Razorpay test key (demo)
+          amount: amount,
+          currency: 'INR',
+          name: 'StyleSphere',
+          description: `${product.availability === 'rent' ? 'Rent' : 'Buy'}: ${product.name}`,
+          image: product.imageUrl || undefined,
+          handler: function (response) {
+            // Successful payment callback (client-only). In production, verify payment on server.
+            console.debug('Razorpay payment success response:', response);
+            showToast('Payment successful! Thank you.', 'success');
+            // Optionally record the transaction in Firestore (demo: store minimal record)
+            try {
+              if (db && userId) {
+                // Store demo transaction under the buyer's user document as requested
+                addDoc(collection(db, `users/${userId}/transaction`), {
+                  productId: product.id,
+                  productName: product.name,
+                  buyerId: userId,
+                  sellerId: product.ownerId || null,
+                  amount: Number(product.price) || 0,
+                  currency: 'INR',
+                  paymentId: response.razorpay_payment_id,
+                  method: 'razorpay_test_client',
+                  timestamp: serverTimestamp(),
+                }).catch(e => console.warn('Failed to save demo transaction:', e));
+              }
+            } catch (e) {
+              console.warn('Transaction recording skipped:', e);
+            }
+          },
+          prefill: {
+            name: user?.displayName || '',
+            email: user?.email || '',
+          },
+          // allow user to close modal before entering optional fields like phone
+          modal: {
+            ondismiss: function() {
+              showToast('Payment cancelled or closed.', 'error');
+            }
+          },
+          notes: {
+            product_id: product.id,
+            product_name: product.name,
+          },
+          theme: { color: '#6D28D9' },
+        };
+
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+      } catch (err) {
+        console.error('Error opening Razorpay checkout:', err);
+        showToast('Unable to open payment gateway. Please try again later.', 'error');
+      }
+    };
   
   return (
     <AppContext.Provider value={{ setScreen, showToast, isAuthReady, userId }}>
@@ -1634,6 +1963,12 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
           onClose={() => { setIsEditModalVisible(false); setEditingItem(null); }}
           item={editingItem}
           onSave={handleUpdateMarketplaceItem}
+        />
+        <EditClosetItemModal
+          isVisible={isEditClosetModalVisible}
+          onClose={() => { setIsEditClosetModalVisible(false); setEditingClosetItem(null); }}
+          item={editingClosetItem}
+          onSave={handleEditClosetItem}
         />
         {/* Closet upload modal rendered at app root */}
         <UploadClosetModal
