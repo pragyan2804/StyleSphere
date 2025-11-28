@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, createContext } from 'react';
 import { signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, setDoc, query, orderBy, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, ArrowRight, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X, Edit } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 
@@ -9,10 +9,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { auth as fbAuth, db as fbDb } from './firebase';
 
 import LiquidEther from './LiquidEther';
-import PrismaticBurst from './PrismaticBurst';
-import Orb from './Orb';
 import Aurora from './Aurora';
 import AuthPage from './AuthPage';
+import Silk from './Silk';
 
 
 
@@ -667,7 +666,6 @@ const App = () => {
       showToast('Error updating item.', 'error');
     }
   };
-
     const handleRemoveOutfit = async () => {
     // Remove the currently displayed generated outfit (client + Firestore),
     // then attempt to create a replacement random combo from the closet.
@@ -799,12 +797,13 @@ const App = () => {
     <div className="relative flex flex-col w-full h-screen bg-transparent text-stone-200">
       {/* top-right upload button removed (upload action moved above Filters in Marketplace) */}
       <div className="absolute inset-0 -z-10 bg-black overflow-hidden" >
-        <Orb
-        hoverIntensity={0.5}
-        rotateOnHover={true}
-        hue={0}
-        forceHoverState={false}
-      />
+        <Silk
+  speed={3.8}
+  scale={0.7}
+  color="#2a2956"
+  noiseIntensity={0}
+  rotation={0}
+/>
       </div>
       <div className="flex flex-col flex-grow overflow-hidden z-0">
         <Header
@@ -902,15 +901,18 @@ const LoginSignupScreen = () => (
   const DashboardScreen = () => (
   <div className="absolute inset-0 w-full h-screen flex items-center justify-center">
     <div className="flex gap-12 z-10">
+      
       <motion.div
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         className="w-96 h-96 p-8 rounded-2xl shadow-2xl text-center backdrop-blur-md flex items-center justify-center"
         onClick={() => setScreen('closet')}
       >
-        <h2 className="text-4xl font-extrabold text-stone-200">
-          My Closet
-        </h2>
+        <div className="flex flex-col items-center">
+            {/* flaticon clothes-hanger icon above the heading (uses 'fi' class names) */}
+            <i className="fi fi-br-clothes-hanger text-white mb-3" style={{ fontSize: '92px', lineHeight: 1 }} aria-hidden="true"></i>
+            <h2 className="text-4xl font-extrabold text-stone-200">My Closet</h2>
+        </div>
       </motion.div>
 
       <motion.div
@@ -919,9 +921,11 @@ const LoginSignupScreen = () => (
         className="w-96 h-96 p-8 rounded-2xl shadow-2xl text-center backdrop-blur-md flex items-center justify-center"
         onClick={() => setScreen('marketplace')}
       >
-        <h2 className="text-4xl font-extrabold text-stone-200">
-          Marketplace
-        </h2>
+        <div className="flex flex-col items-center">
+          {/* same icon as My Closet for visual consistency */}
+          <ShoppingCart size={100} className="text-white mb-3" />
+          <h2 className="text-4xl font-extrabold text-stone-200">Marketplace</h2>
+        </div>
       </motion.div>
     </div>
   </div>
@@ -1743,7 +1747,7 @@ const UploadModal = ({ isVisible, onClose, onUpload, categories }) => {
                             {userId && product.ownerId === userId && (
                               <div className="absolute top-3 right-3 flex items-center space-x-2">
                                 <button onClick={() => { setEditingItem(product); setIsEditModalVisible(true); }} className="p-2 bg-black/40 hover:bg-black/50 rounded-full text-stone-200">
-                                  <Save size={18} />
+                                  <Edit size={18} />
                                 </button>
                                 <button onClick={() => handleDeleteMarketplaceItem(product)} className="p-2 bg-black/40 hover:bg-red-600 rounded-full text-red-300">
                                   <Trash2 size={18} />

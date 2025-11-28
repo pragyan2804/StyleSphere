@@ -65,6 +65,10 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+.fi.fi-rr-basket-shopping-simple {
+  width: 32px;
+  height: 32px;
+}
 
 .signup-button {
   background: none;       /* no background */
