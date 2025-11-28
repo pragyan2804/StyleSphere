@@ -1,7 +1,7 @@
-import React, { useState, useEffect, createContext } from 'react';
+import React, { useState, useEffect, useRef, createContext } from 'react';
 import { signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, collection, addDoc, serverTimestamp, deleteDoc, setDoc, query, orderBy, updateDoc } from 'firebase/firestore';
-import { ArrowLeft, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ShoppingCart, Heart, User, Sparkle, Camera, Save, Trash2, Search, MessageSquare, PlusCircle, CheckCircle, XCircle, Grid, Upload, DollarSign, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 
@@ -263,6 +263,9 @@ const App = () => {
   // Closet upload modal visibility
   const [isClosetUploadModalVisible, setIsClosetUploadModalVisible] = useState(false);
   const [savedOutfits, setSavedOutfits] = useState([]);
+  const lastGeneratedFingerprintRef = useRef(null);
+  const [generatedOutfit, setGeneratedOutfit] = useState(null);
+  const [generatedIndex, setGeneratedIndex] = useState(0);
   const [selectedOutfitItems, setSelectedOutfitItems] = useState({
     Tops: null,
     Bottoms: null,
@@ -299,9 +302,23 @@ const App = () => {
         console.error("Error fetching saved outfits:", error);
       });
 
+      // Listen to generated outfit document
+      const generatedOutfitsRef = collection(db, `users/${userId}/generatedOutfits`);
+      const unsubscribeGenerated = onSnapshot(doc(generatedOutfitsRef, 'recommended'), (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setGeneratedOutfit(data);
+          // reset index to first recommendation whenever data changes
+          setGeneratedIndex(0);
+        }
+      }, (error) => {
+        console.warn("Note: No generated outfit yet, that's okay:", error);
+      });
+
       return () => {
         unsubscribeCloset();
         unsubscribeSavedOutfits();
+        unsubscribeGenerated();
       };
     }
   }, [db, userId]);
@@ -349,6 +366,99 @@ const App = () => {
       setClosetItems([]); // Fallback to empty closet on error
     }
   }, [db, userId]);
+
+  // Auto-generate up to 3 random combinations (Tops + Bottoms + Footwear)
+  // and store them under `users/{userId}/generatedOutfits/recommended`.
+  useEffect(() => {
+    console.log('Auto-generate effect triggered. db:', !!db, 'userId:', userId, 'closetItems count:', closetItems?.length || 0);
+
+    if (!db || !userId) {
+      console.log('Skipping: no db or userId');
+      return;
+    }
+    
+    if (!Array.isArray(closetItems) || closetItems.length === 0) {
+      console.log('Skipping: closetItems not ready or empty');
+      return;
+    }
+
+    const tops = closetItems.filter(i => i.category === 'Tops');
+    const bottoms = closetItems.filter(i => i.category === 'Bottoms');
+    const footwear = closetItems.filter(i => i.category === 'Footwear');
+
+    console.log('Filtered items - Tops:', tops.length, 'Bottoms:', bottoms.length, 'Footwear:', footwear.length);
+
+    if (tops.length === 0 || bottoms.length === 0 || footwear.length === 0) {
+      console.log('Skipping: missing category items');
+      return; // not enough items to form a full outfit
+    }
+
+    // fingerprint to avoid re-writing for identical closet state
+    const fingerprint = [...tops, ...bottoms, ...footwear].map(i => i.id).sort().join('|');
+    console.log('Current fingerprint:', fingerprint);
+    console.log('Last saved fingerprint:', lastGeneratedFingerprintRef.current);
+    
+    if (lastGeneratedFingerprintRef.current === fingerprint) {
+      console.log('Skipping: same fingerprint as before');
+      return;
+    }
+
+    const generateCombos = async () => {
+      try {
+        const combos = [];
+        const seen = new Set();
+        const maxCombos = 3;
+        const totalPossible = tops.length * bottoms.length * footwear.length;
+
+        const makeKey = (t, b, f) => `${t.id}|${b.id}|${f.id}`;
+        while (combos.length < maxCombos && seen.size < totalPossible) {
+          const t = tops[Math.floor(Math.random() * tops.length)];
+          const b = bottoms[Math.floor(Math.random() * bottoms.length)];
+          const f = footwear[Math.floor(Math.random() * footwear.length)];
+          const key = makeKey(t, b, f);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          combos.push({
+            items: [
+              { id: t.id, category: 'Tops', imageUrl: t.imageUrl },
+              { id: b.id, category: 'Bottoms', imageUrl: b.imageUrl },
+              { id: f.id, category: 'Footwear', imageUrl: f.imageUrl },
+            ]
+          });
+        }
+
+        console.log('Generated combos:', combos.length, combos);
+
+        // Persist in Firestore as a collection document
+        const generatedOutfitsRef = collection(db, `users/${userId}/generatedOutfits`);
+        await setDoc(doc(generatedOutfitsRef, 'recommended'), {
+          combos,
+          fingerprint,
+          timestamp: serverTimestamp(),
+        }, { merge: true });
+
+        lastGeneratedFingerprintRef.current = fingerprint;
+        console.log('✅ Auto-generated outfits saved successfully for user', userId);
+      } catch (err) {
+        console.error('❌ Error generating/saving outfits:', err);
+      }
+    };
+
+    generateCombos();
+  }, [closetItems, db, userId]);
+
+  // When generatedOutfit or generatedIndex changes, update selectedOutfitItems
+  useEffect(() => {
+    if (!generatedOutfit || !Array.isArray(generatedOutfit.combos) || generatedOutfit.combos.length === 0) {
+      setSelectedOutfitItems({ Tops: null, Bottoms: null, Footwear: null });
+      return;
+    }
+    const idx = Math.max(0, Math.min(generatedIndex, generatedOutfit.combos.length - 1));
+    const combo = generatedOutfit.combos[idx];
+    const outfitObj = { Tops: null, Bottoms: null, Footwear: null };
+    if (combo?.items) combo.items.forEach(item => outfitObj[item.category] = item);
+    setSelectedOutfitItems(outfitObj);
+  }, [generatedOutfit, generatedIndex]);
 
   const showToast = (message, type) => {
     setToastMessage(message);
@@ -470,6 +580,22 @@ const App = () => {
       showToast("Error saving outfit.", "error");
       console.error("Error adding document: ", e);
     }
+  };
+
+  // Cycle through generated recommendations
+  const prevGenerated = () => {
+    if (!generatedOutfit?.combos?.length) return;
+    setGeneratedIndex(i => {
+      const len = generatedOutfit.combos.length;
+      return ((i - 1) + len) % len;
+    });
+  };
+  const nextGenerated = () => {
+    if (!generatedOutfit?.combos?.length) return;
+    setGeneratedIndex(i => {
+      const len = generatedOutfit.combos.length;
+      return (i + 1) % len;
+    });
   };
 
   const handleDeleteClosetItem = async (item) => {
@@ -805,18 +931,31 @@ const LoginSignupScreen = () => (
         </div>
       
           <div className="flex-shrink-0 w-full lg:w-96 p-6 rounded-2xl shadow-xl flex flex-col items-center space-y-4 backdrop-blur-md">
-            <h3 className="text-xl font-bold text-stone-200">Outfit of the Day</h3>
-            <div className="w-full space-y-3">
-              {categories.map(category => (
-                <div key={category} className="flex flex-col items-center p-3 bg-stone-700/50 rounded-lg shadow-md glassy-card">
-                  <p className="font-semibold text-sm text-stone-400">{category}</p>
-                  <img
-                    src={selectedOutfitItems[category]?.imageUrl || `https://placehold.co/150x150/292524/a8a29e?text=${category}`}
-                    alt={`${category} item`}
-                    className="w-24 h-24 object-cover object-center mt-2 rounded-md"
-                  />
+            <div className="w-full">
+              <div className="flex items-center justify-between w-full mb-3">
+                <button onClick={prevGenerated} className="p-2 rounded-full bg-black/30 hover:bg-black/50 mr-3">
+                  <ArrowLeft size={18} />
+                </button>
+                <h3 className="text-xl font-bold text-stone-200 flex-1 text-center px-3">Recommended Outfits for the Day</h3>
+                <div className="flex items-center space-x-2 ml-3">
+                  <span className="text-sm text-stone-400">{generatedOutfit?.combos ? `${generatedIndex+1}/${generatedOutfit.combos.length}` : '0/0'}</span>
+                  <button onClick={nextGenerated} className="p-2 rounded-full bg-black/30 hover:bg-black/50">
+                    <ArrowRight size={18} />
+                  </button>
                 </div>
-              ))}
+              </div>
+              <div className="w-full space-y-3">
+                {categories.map(category => (
+                  <div key={category} className="flex flex-col items-center p-3 bg-stone-700/50 rounded-lg shadow-md glassy-card">
+                    <p className="font-semibold text-sm text-stone-400">{category}</p>
+                    <img
+                      src={selectedOutfitItems[category]?.imageUrl || `https://placehold.co/150x150/292524/a8a29e?text=${category}`}
+                      alt={`${category} item`}
+                      className="w-24 h-24 object-cover object-center mt-2 rounded-md"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="w-full space-y-3 pt-4">
               <button
