@@ -668,14 +668,98 @@ const App = () => {
     }
   };
 
-  const handleRemoveOutfit = () => {
-    setSelectedOutfitItems({
-      Head: null,
-      Tops: null,
-      Bottoms: null,
-      Footwear: null,
-    });
-    showToast("Outfit removed.", "success");
+    const handleRemoveOutfit = async () => {
+    // Remove the currently displayed generated outfit (client + Firestore),
+    // then attempt to create a replacement random combo from the closet.
+    if (!generatedOutfit?.combos || generatedOutfit.combos.length === 0) {
+      setSelectedOutfitItems({ Head: null, Tops: null, Bottoms: null, Footwear: null });
+      showToast('No generated outfit to remove.', 'error');
+      return;
+    }
+
+    // Local-only fallback (no Firebase configured)
+    if (!db || !userId) {
+      const updatedCombos = Array.isArray(generatedOutfit.combos) ? [...generatedOutfit.combos] : [];
+      updatedCombos.splice(generatedIndex, 1);
+      setGeneratedOutfit({ ...generatedOutfit, combos: updatedCombos });
+      const newIndex = Math.max(0, Math.min(generatedIndex, updatedCombos.length - 1));
+      setGeneratedIndex(newIndex);
+      if (!updatedCombos.length) {
+        setSelectedOutfitItems({ Tops: null, Bottoms: null, Footwear: null });
+      } else {
+        const combo = updatedCombos[newIndex] || updatedCombos[0];
+        const outfitObj = { Tops: null, Bottoms: null, Footwear: null };
+        if (combo?.items) combo.items.forEach(item => outfitObj[item.category] = item);
+        setSelectedOutfitItems(outfitObj);
+      }
+      showToast('Outfit removed (local).', 'success');
+      return;
+    }
+
+    try {
+      // Remove the combo from the local copy
+      const updatedCombos = Array.isArray(generatedOutfit.combos) ? [...generatedOutfit.combos] : [];
+      updatedCombos.splice(generatedIndex, 1);
+
+      // Attempt to generate a replacement combo (unique vs existing combos)
+      const tops = closetItems.filter(i => i.category === 'Tops');
+      const bottoms = closetItems.filter(i => i.category === 'Bottoms');
+      const footwear = closetItems.filter(i => i.category === 'Footwear');
+
+      const makeKey = (t, b, f) => `${t.id}|${b.id}|${f.id}`;
+      const existingKeys = new Set((updatedCombos || []).map(c => (c.items || []).map(i => i.id).join('|')));
+
+      if (tops.length > 0 && bottoms.length > 0 && footwear.length > 0) {
+        const totalPossible = tops.length * bottoms.length * footwear.length;
+        if (existingKeys.size < totalPossible) {
+          // Try to find one unique random combo
+          let attempts = 0;
+          let found = null;
+          while (attempts < 1000 && !found) {
+            attempts++;
+            const t = tops[Math.floor(Math.random() * tops.length)];
+            const b = bottoms[Math.floor(Math.random() * bottoms.length)];
+            const f = footwear[Math.floor(Math.random() * footwear.length)];
+            const key = makeKey(t, b, f);
+            if (existingKeys.has(key)) continue;
+            existingKeys.add(key);
+            found = {
+              items: [
+                { id: t.id, category: 'Tops', imageUrl: t.imageUrl },
+                { id: b.id, category: 'Bottoms', imageUrl: b.imageUrl },
+                { id: f.id, category: 'Footwear', imageUrl: f.imageUrl },
+              ]
+            };
+            updatedCombos.push(found);
+          }
+        }
+      }
+
+      // Persist updated combos to Firestore
+      const generatedOutfitsRef = collection(db, `users/${userId}/generatedOutfits`);
+      await setDoc(doc(generatedOutfitsRef, 'recommended'), {
+        combos: updatedCombos,
+        timestamp: serverTimestamp(),
+      }, { merge: true });
+
+      // Optimistically update UI immediately (snapshot listener will reconcile)
+      setGeneratedOutfit({ ...generatedOutfit, combos: updatedCombos });
+      const newIndex = Math.max(0, Math.min(generatedIndex, updatedCombos.length - 1));
+      setGeneratedIndex(newIndex);
+      if (!updatedCombos.length) {
+        setSelectedOutfitItems({ Tops: null, Bottoms: null, Footwear: null });
+      } else {
+        const combo = updatedCombos[newIndex] || updatedCombos[0];
+        const outfitObj = { Tops: null, Bottoms: null, Footwear: null };
+        if (combo?.items) combo.items.forEach(item => outfitObj[item.category] = item);
+        setSelectedOutfitItems(outfitObj);
+      }
+
+      showToast('Outfit removed.', 'success');
+    } catch (e) {
+      console.error('Error removing generated outfit:', e);
+      showToast('Error removing outfit.', 'error');
+    }
   };
 
   const handleRemoveSavedOutfit = async (outfitId) => {
@@ -933,13 +1017,13 @@ const LoginSignupScreen = () => (
           <div className="flex-shrink-0 w-full lg:w-96 p-6 rounded-2xl shadow-xl flex flex-col items-center space-y-4 backdrop-blur-md">
             <div className="w-full">
               <div className="flex items-center justify-between w-full mb-3">
-                <button onClick={prevGenerated} className="p-2 rounded-full bg-black/30 hover:bg-black/50 mr-3">
+                <button onClick={prevGenerated} className="p-2 rounded-full bg-[#2750d9] hover:bg-[#1f47b8] mr-3 text-white">
                   <ArrowLeft size={18} />
                 </button>
                 <h3 className="text-xl font-bold text-stone-200 flex-1 text-center px-3">Recommended Outfits for the Day</h3>
                 <div className="flex items-center space-x-2 ml-3">
                   <span className="text-sm text-stone-400">{generatedOutfit?.combos ? `${generatedIndex+1}/${generatedOutfit.combos.length}` : '0/0'}</span>
-                  <button onClick={nextGenerated} className="p-2 rounded-full bg-black/30 hover:bg-black/50">
+                  <button onClick={nextGenerated} className="p-2 rounded-full bg-[#2750d9] hover:bg-[#1f47b8] ml-0 text-white">
                     <ArrowRight size={18} />
                   </button>
                 </div>
@@ -957,14 +1041,8 @@ const LoginSignupScreen = () => (
                 ))}
               </div>
             </div>
-            <div className="w-full space-y-3 pt-4">
-              <button
-                onClick={handleSaveOutfit}
-                className="w-full flex items-center justify-center space-x-2 text-white font-semibold py-3 rounded-lg shadow-lg glassy-button-primary"
-              >
-                <Save size={20} />
-                <span>Save Outfit</span>
-              </button>
+              <div className="w-full space-y-3 pt-4">
+              
               <button
                 onClick={handleRemoveOutfit}
                 className="w-full flex items-center justify-center space-x-2 text-white font-semibold py-3 rounded-lg shadow-lg glassy-button-danger"
